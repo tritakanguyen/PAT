@@ -17,6 +17,7 @@
         Added Better comments.
         More accurate cycle count. 
         Tidied up the code to make it readable.
+        Flag 2
 """
 
 import json
