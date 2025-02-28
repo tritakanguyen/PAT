@@ -2,6 +2,8 @@
 """
     Pick Assistant Tool:
     Authors: djoneben (Ben Jones), grsjoshu (Joshua Green), & (Tri Nguyen) ftnguyen
+    v1.14:
+        Fixed bug in string construction caused by a file not being generated on Ubuntu 24
     v1.13:
         Fixed bug in argument parser
     v1:12:
@@ -24,7 +26,7 @@ import os
 import argparse
 import time
 
-print ("PickAssistant v1.13")
+print ("PickAssistant v1.14")
 
 WindowsDebug = False # switch to False if you are on a workcell. 
 
@@ -194,7 +196,7 @@ for row in range(len(stowedPodFace)):
                         StowedTotal[row][col] = len(stowedPodFace[row][col])
 
 
-output = "Pod: "+str(PodName)+"\n"+podBarcode+"\n"+PodData['podInfo']['podId']+"\n"+"Orchestrator: "+str(orchestrator+"/"+podID)+"\n\n"+str(printPod(StowedTotal))
+output = "Pod: "+str(PodName)+"\n"+podBarcode+"\n\n"+"Orchestrator: "+str(orchestrator+"/"+podID)+"\n\n"+str(printPod(StowedTotal))
 output += "\n"
 
 #Adds / reorders the list of items into bin location by alphabetic order first then numerical. 
