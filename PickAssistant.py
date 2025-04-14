@@ -2,6 +2,8 @@
 """
     Pick Assistant Tool:
     Authors: djoneben (Ben Jones), grsjoshu (Joshua Green), & (Tri Nguyen) ftnguyen
+    v1.15:
+        Added pod barcode database to automatically look up the pod name. 
     v1.14:
         Fixed bug in string construction caused by a file not being generated on Ubuntu 24
     v1.13:
@@ -29,6 +31,55 @@ import time
 print ("PickAssistant v1.14")
 
 WindowsDebug = False # switch to False if you are on a workcell. 
+
+podBarcodeDatabase = {
+    "HB05101914818 H12-A" : "Ninja Turtle",
+    "HB05101914818 H12-C" : "Ninja Turtle",
+    "HB05109809243 H11-A" : "Ninja Turtle",
+    "HB05109809243 H11-C" : "Ninja Turtle",
+    "HB05109809241 H10-A" : "Ninja Turtle",
+    "HB05109809241 H10-C" : "Ninja Turtle",
+    "HB05102038798 H8-A" : "Ninja Turtle",
+    "HB05102038798 H8-C" : "Ninja Turtle",
+    "HB05109809234 H12-A" : "South Park",
+    "HB05109809234 H12-C" : "South Park",
+    "HB05109809233 H11-A" : "South Park",
+    "HB05109809233 H11-C" : "South Park",
+    "HB05103435481 H10-A" : "South Park",
+    "HB05103435481 H10-C" : "South Park",
+    "HB05109809242 H8-A" : "South Park",
+    "HB05109809242 H8-C" : "South Park",
+    "HB05100404700 H12-A" : "Ghost Busters",
+    "HB05100404700 H12-C" : "Ghost Busters",
+    "HB05100404680 H11-A" : "Ghost Busters",
+    "HB05100404680 H11-C" : "Ghost Busters",
+    "HB05109809235 H10-A" : "Ghost Busters",
+    "HB05109809235 H10-C" : "Ghost Busters",
+    "HB05100404695 H8-A" : "Ghost Busters",
+    "HB05100404695 H8-C" : "Ghost Busters",
+    "HB05100404690 H12-A" : "Power Rangers",
+    "HB05100404690 H12-C" : "Power Rangers",
+    "HB05100404681 H11-A" : "Power Rangers",
+    "HB05100404681 H11-C" : "Power Rangers",
+    "HB05100404683 H10-A" : "Power Rangers",
+    "HB05100404683 H10-C" : "Power Rangers",
+    "HB05100404694 H8-A" : "Power Rangers",
+    "HB05100404694 H8-C" : "Power Rangers",
+    "HB05100404693 H12-A" : "Ghosts",
+    "HB05100404693 H12-C" : "Ghosts",
+    "HB05103433784 H11-A" : "Ghosts",
+    "HB05103433784 H11-C" : "Ghosts",
+    "HB05100404684 H10-A" : "Ghosts",
+    "HB05100404684 H10-C" : "Ghosts",
+    "HB05100404696 H8-A" : "Ghosts",
+    "HB05100404696 H8-C" : "Ghosts",
+    "HB05100404688 H10-A" : "Clone",
+    "HB05100404688 H10-C" : "Clone",
+    "HB05100404686 H10-A" : "Goku",
+    "HB05100404686 H10-C" : "Goku",
+    "HB05100404685 H10-A" : "Pod Father",
+    "HB05100404685 H10-C" : "Pod Father"
+}
 
 def read_json_file(file_path):
     try:
@@ -105,10 +156,6 @@ if TrueCycleCount==0:
     if inputt.isdigit():
         TrueCycleCount=int(inputt)
 
-#Asks for user to input an alias identifier for the pod barcode. 
-if PodName=="":
-    PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
-
 #Get the Pod Barcode from generated files. If the files do not exist then the program will print a crash report to terminal.
 if WindowsDebug:
     file_path = ''+orchestrator+''
@@ -116,6 +163,14 @@ if WindowsDebug:
 else:
     file_path = '/home/local/carbon/archive/'+orchestrator+'/'
     podBarcode = read_json_file(file_path+podID+"/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json")
+
+#Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database. 
+if podBarcode in podBarcodeDatabase:
+    PodName= podBarcodeDatabase[podBarcode]
+if PodName=="":
+    PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
+else:
+    print (PodName," was found via the barcode")
 
 #Get Pod barcode/ID
 if WindowsDebug:
