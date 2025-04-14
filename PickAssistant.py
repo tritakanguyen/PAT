@@ -28,7 +28,7 @@ import os
 import argparse
 import time
 
-print ("PickAssistant v1.14")
+print ("PickAssistant v1.15")
 
 WindowsDebug = False # switch to False if you are on a workcell. 
 
