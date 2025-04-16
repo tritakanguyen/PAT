@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deployment Workflow Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .input-box {
+            margin-top: 10px;
+            padding: 10px;
+            display: none;
+            background-color: #e9f7fe;
+            border-radius: 5px;
+        }
+        .steps-container {
+            margin-top: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f0f0f0;
+            display: none;
+        }
+        .step {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+            position: relative;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.reset {
+            background-color: #888;
+        }
+        button.reset:hover {
+            background-color: #777;
+        }
+        code {
+            display: block;
+            padding: 10px;
+            background-color: #f1f1f1;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            margin-top: 5px;
+        }
+        .checkbox-container {
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+        
+        /* Tooltip styles */
+        .tooltip-btn {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 16px;
+            font-size: 12px;
+            margin-left: 5px;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .tooltip-content {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            top: -5px;
+            left: 125%;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-weight: normal;
+            font-size: 12px;
+        }
+        
+        .tooltip-btn:hover .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* Copy button styles */
+        .copy-btn {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            margin: 0;
+        }
+        
+        .copy-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+        }
+
+        .tab button {
+            background-color: #45a049;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 10px 15px; /* Reduce padding */
+            transition: background-color 0.3s, transform 0.2s;
+            font-size: 14px; /* Reduce font size */
+            width: 25%; /* Reduce width of the tab buttons */
+        }
+
+        .tab button:hover {
+            background-color: #33d859;
+            transform: scale(1.05);
+        }
+
+        .tab button.active {
+            background-color: #33d859;
+        }
+
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+        }
+
+        /* Troubleshooting Panel Styles */
+        .troubleshoot-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            z-index: 1000;
+            height: 100vh;
+        }
+
+        .troubleshoot-btn {
+            background-color: #888;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px 0 0 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+            margin-top: 20px;
+        }
+
+        .troubleshoot-btn:hover {
+            background-color: #777;
+        }
+
+        .troubleshoot-content {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 16%;
+            height: 100vh;
+            background-color: white;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+            padding: 10px;
+            display: none;
+            overflow-y: auto;
+        }
+
+        .troubleshoot-content.open {
+            display: block;
+        }
+
+        .troubleshoot-content h4 {
+            font-size: 16px;
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+
+        .troubleshoot-content p {
+            font-size: 14px;
+            margin: 8px 0;
+        }
+
+        .troubleshoot-content code {
+            font-size: 13px;
+            margin: 5px 0;
+        }
+
+        .close-troubleshoot {
+            position: absolute;
+            right: 0px;
+            top: 10px;
+            background-color: #888;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            width: 30px;
+            height: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .close-troubleshoot:hover {
+            background-color: #777;
+        }
+        
+        .version-text {
+            position: fixed;
+            right: 10px;
+            bottom: 10px;
+            font-size: 8px;
+            margin: 0;
+            z-index: 1001;
+        }
+    </style>
+</head>
+<body>
+    <!-- Add this before the main container -->
+    <div class="troubleshoot-panel">
+        <button class="troubleshoot-btn" onclick="toggleTroubleshoot()">≡</button>
+        <div class="troubleshoot-content" id="troubleshootPanel">
+            <button class="close-troubleshoot" onclick="toggleTroubleshoot()">›</button>
+            <br></br>
+            <h4>Troubleshooting Guide</h4>
+                <p>Permission denied. Unable to create workspace<br>
+                Likely to see at step 1. Solution:</p>
+                <code>cd</code>
+                <p>Failed to run Brazil-Build<br>
+                Likely to see at step 3,4 and 7. Solution: </p>
+                <code>toolbox install brazilcli</code>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>WorkSpace & Workflow Builder</h1>
+        <div id="configForm">
+            <!-- General Inputs -->
+            <div class="form-group">
+                <label for="testDate">Test Date:</label>
+                <input type="text" id="testDate" placeholder="Enter test date (YYYYMMDD)" oninput="updateWorkspaceTitle()">
+            </div>
+            <div class="form-group">
+                <label for="testTitle">Test Title:</label>
+                <input type="text" id="testTitle" placeholder="Enter test title" oninput="updateWorkspaceTitle()">
+            </div>
+            <div class="form-group">
+                <label for="workspaceTitle">Workspace Title:</label>
+                <input type="text" id="workspaceTitle" placeholder="Workspace title" readonly>
+            </div>
+
+            <!-- Subsystem Checkbox -->
+            <div class="checkbox-container" style="display: flex; gap: 20px;">
+                <label><input type="checkbox" id="stowCheckbox" onchange="toggleSection('stowSection')"> Stow</label>
+                <label><input type="checkbox" id="bufferCheckbox" onchange="toggleSection('bufferSection')"> Buffer</label>
+                <label><input type="checkbox" id="transferCheckbox" onchange="toggleSection('transferSection')"> Transfer</label>
+            </div>
+
+            <!-- Sections -->
+            <div id="stowSection" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
+                <h3>Stow Section</h3>
+                <div class="form-group">
+                    <label for="stowWorkcellId">Workcell ID:</label>
+                    <select id="stowWorkcellId">
+                        <option value="">Select Workcell ID</option>
+                        <option value="0203">0203</option>
+                        <option value="0206">0206</option>
+                        <option value="0207">0207</option>
+                        <option value="0208">0208</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="stowEventId">Event ID:</label>
+                    <input type="text" id="stowEventId" placeholder="Event ID">
+                </div>
+                <div class="checkbox-container">
+                    <div class="form-group">
+                        <label><input type="checkbox" id="stowMainline" onchange="toggleMainline()"> Mainline</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="stowImageTag" onchange="toggleInput('stowImageTagInput')"> Image Tag</label>
+                        <div id="stowImageTagInput" class="input-box">
+                            <label for="stowImageTagValue">Enter Image Tag:</label>
+                            <textarea id="stowImageTagValue" placeholder="Enter image tag"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 5px;">
+                            <input type="checkbox" id="stowCherryPick" onchange="toggleCherryPickSection('stowCherryPickSection', 'stowAddBtn')"> Cherry Pick Packages
+                        </label>
+                        <button id="stowAddBtn" style="display: none; background-color: #4CAF50; color: white; border: none; border-radius: 6px; padding: 0 10px; margin-top: 0px; margin-bottom: 5px; height: 24px; font-size: 12px; text-align: center; cursor: pointer;">Add Package</button>
+                    </div>
+                    <div id="stowCherryPickSection" style="display: none; margin-top: 10px;">
+                        <div class="form-group">
+                            <label><input type="checkbox" id="stowVsConfigPick" onchange="toggleInput('stowVsConfigPickInput')"> Vulcan Config</label>
+                            <div id="stowVsConfigPickInput" class="input-box">
+                                <label for="stowVsConfigPickValue">Enter Vulcan Config cherry pick value:</label>
+                                <textarea id="stowVsConfigPickValue" placeholder=""></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" id="stowDeployArtifactsPick" onchange="toggleInput('stowDeployArtifactsPickInput')"> Deploy Artifacts</label>
+                            <div id="stowDeployArtifactsPickInput" class="input-box">
+                                <label for="stowDeployArtifactsPickValue">Enter Deploy Artifacts cherry pick value:</label>
+                                <textarea id="stowDeployArtifactsPickValue" placeholder=""></textarea>
+                            </div>
+                        </div>
+                        <div id="stowDynamicInputs"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="bufferSection" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
+                <h3>Buffer Section</h3>
+                <div class="form-group">
+                    <label for="bufferWorkcellId">Workcell ID:</label>
+                    <select id="bufferWorkcellId">
+                        <option value="">Select Workcell ID</option>
+                        <option value="0203">0203</option>
+                        <option value="0206">0206</option>
+                        <option value="0207">0207</option>
+                        <option value="0208">0208</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="bufferEventId">Event ID:</label>
+                    <input type="text" id="bufferEventId" placeholder="Event ID">
+                </div>
+                <div class="checkbox-container">
+                    <div class="form-group">
+                        <label><input type="checkbox" id="bufferMainline" onchange="toggleMainline()"> Mainline</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="bufferImageTag" onchange="toggleInput('bufferImageTagInput')"> Image Tag</label>
+                        <div id="bufferImageTagInput" class="input-box">
+                            <label for="bufferImageTagValue">Enter Image Tag:</label>
+                            <textarea id="bufferImageTagValue" placeholder="Enter image tag"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 5px;">
+                            <input type="checkbox" id="bufferCherryPick" onchange="toggleCherryPickSection('bufferCherryPickSection', 'bufferAddBtn')"> Cherry Pick Packages
+                        </label>
+                        <button id="bufferAddBtn" style="display: none; background-color: #4CAF50; color: white; border: none; border-radius: 6px; padding: 2px 10px; font-size: 12px; text-align: center; cursor: pointer;">Add Package</button>
+                    </div>
+                    <div id="bufferCherryPickSection" style="display: none; margin-top: 10px;">
+                        <div class="form-group">
+                            <label><input type="checkbox" id="bufferVsConfigPick" onchange="toggleInput('bufferVsConfigPickInput')"> Vulcan Config</label>
+                            <div id="bufferVsConfigPickInput" class="input-box">
+                                <label for="bufferVsConfigPickValue">Enter Vulcan Config cherry pick value:</label>
+                                <textarea id="bufferVsConfigPickValue" placeholder=""></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" id="bufferDeployArtifactsPick" onchange="toggleInput('bufferDeployArtifactsPickInput')"> Deploy Artifacts</label>
+                            <div id="bufferDeployArtifactsPickInput" class="input-box">
+                                <label for="bufferDeployArtifactsPickValue">Enter Deploy Artifacts cherry pick value:</label>
+                                <textarea id="bufferDeployArtifactsPickValue" placeholder=""></textarea>
+                            </div>
+                        </div>
+                        <div id="bufferDynamicInputs"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="transferSection" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
+                <h3>Transfer Section</h3>
+                <div class="form-group">
+                    <label for="transferWorkcellId">Workcell ID:</label>
+                    <select id="transferWorkcellId">
+                        <option value="">Select Workcell ID</option>
+                        <option value="0202">0202</option>
+                        <option value="0205">0205</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="transferEventId">Event ID:</label>
+                    <input type="text" id="transferEventId" placeholder="Event ID">
+                </div>
+                <div class="checkbox-container">
+                    <div class="form-group">
+                        <label><input type="checkbox" id="transferMainline" onchange="toggleMainline()"> Mainline</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="transferImageTag" onchange="toggleInput('transferImageTagInput')"> Image Tag</label>
+                        <div id="transferImageTagInput" class="input-box">
+                            <label for="transferImageTagValue">Enter Image Tag:</label>
+                            <textarea id="transferImageTagValue" placeholder="Enter image tag"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 5px;">
+                            <input type="checkbox" id="transferCherryPick" onchange="toggleCherryPickSection('transferCherryPickSection', 'transferAddBtn')"> Cherry Pick Packages
+                        </label>
+                        <button id="transferAddBtn" style="display: none; background-color: #4CAF50; color: white; border: none; border-radius: 6px; padding: 2px 10px; font-size: 12px; text-align: center; cursor: pointer;">Add Package</button>
+                    </div>
+                    <div id="transferCherryPickSection" style="display: none; margin-top: 10px;">
+                        <div class="form-group">
+                            <label><input type="checkbox" id="transferVsConfigPick" onchange="toggleInput('transferVsConfigPickInput')"> Vulcan Config</label>
+                            <div id="transferVsConfigPickInput" class="input-box">
+                                <label for="transferVsConfigPickValue">Enter Vulcan Config cherry pick value:</label>
+                                <textarea id="transferVsConfigPickValue" placeholder=""></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" id="transferDeployArtifactsPick" onchange="toggleInput('transferDeployArtifactsPickInput')"> Deploy Artifacts</label>
+                            <div id="transferDeployArtifactsPickInput" class="input-box">
+                                <label for="transferDeployArtifactsPickValue">Enter Deploy Artifacts cherry pick value:</label>
+                                <textarea id="transferDeployArtifactsPickValue" placeholder=""></textarea>
+                            </div>
+                        </div>
+                        <div id="transferDynamicInputs"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div id="actionButtons">
+                <button id="generateBtn" onclick="generateSteps()">Guide Me!</button>
+                <button id="resetBtn" class="reset" onclick="resetForm()" style="display: none;">Start Over</button>
+            </div>
+
+            <!-- Steps Guide -->
+            <div id="stepsGuide" class="steps-container" style="display: none;">
+                <div class="tab">
+                    <button class="tablinks" id="stowTabBtn" onclick="openTab(event, 'StowTab')" style="display: none;">Stow</button>
+                    <button class="tablinks" id="bufferTabBtn" onclick="openTab(event, 'BufferTab')" style="display: none;">Buffer</button>
+                    <button class="tablinks" id="transferTabBtn" onclick="openTab(event, 'TransferTab')" style="display: none;">Transfer</button>
+                </div>
+                <div id="StowTab" class="tabcontent"><h3>Stow Section</h3><div id="stowSteps"></div></div>
+                <div id="BufferTab" class="tabcontent"><h3>Buffer Section</h3><div id="bufferSteps"></div></div>
+                <div id="TransferTab" class="tabcontent"><h3>Transfer Section</h3><div id="transferSteps"></div></div>
+            </div>
+        </div>
+    </div>
+    
+    <p class="version-text">v1.0</p>
+
+    <script>
+        // Add this at the beginning of the script section
+        const stepTooltips = {
+            'Step 1': 'Creates a new workspace with the specified subsystem deployment artifacts.Then navigate to workspace directory. Since limited to use CR Pull, CR Pull step likely to bypass.',
+            'Step 2': 'Pull additional service packages if specified.',
+            'Step 3': 'Navigate to VulcanStowConfig directory for cherry pick if specified then build the local environment for specified station.',
+            'Step 4': 'Navigate to different service package directory that need cherry pick.',
+            'Step 5': 'Navigate to the deployment artifacts and apply cherry pick if needed.',
+            'Step 6': 'Modify docker-compose.yaml for image tag if needed.',
+            'Step 7': 'Build the workflow using brazil-build using Deployment Artifacts package.',
+            'Step 8': 'Rsync artifacts to the target deployment workflow directory.',
+            'Step 9': 'Navigate to the worflow directory.',
+            'Step 10': 'Execute the launch script to start the workflow.'
+        };
+
+        // Modify the step HTML generation in stowSteps, bufferSteps, and transferSteps
+        // Replace <strong>Step X:</strong> with this new format:
+        function createStepHeader(stepNum) {
+            return `<strong>Step ${stepNum}:</strong><span class="tooltip-btn">?<span class="tooltip-content">${stepTooltips['Step ' + stepNum]}</span></span>`;
+        }
+
+        // Utility Functions
+        function generateSectionHTML(sectionId, workcellOptions) {
+            return `
+                <div id="${sectionId}Section" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
+                    <h3>${capitalize(sectionId)} Section</h3>
+                    <div class="form-group">
+                        <label for="${sectionId}WorkcellId">Workcell ID:</label>
+                        <select id="${sectionId}WorkcellId">
+                            <option value="">Select Workcell ID</option>
+                            ${workcellOptions.map(option => `<option value="${option}">${option}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="${sectionId}EventId">Event ID:</label>
+                        <input type="text" id="${sectionId}EventId" placeholder="Event ID">
+                    </div>
+                    <div class="checkbox-container">
+                        <div class="form-group">
+                            <label><input type="checkbox" id="${sectionId}Mainline" onchange="toggleMainline()"> Mainline</label>
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" id="${sectionId}ImageTag" onchange="toggleInput('${sectionId}ImageTagInput')"> Image Tag</label>
+                            <div id="${sectionId}ImageTagInput" class="input-box">
+                                <label for="${sectionId}ImageTagValue">Enter Image Tag:</label>
+                                <textarea id="${sectionId}ImageTagValue" placeholder="Enter image tag"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 5px;">
+                                <input type="checkbox" id="${sectionId}CherryPick" onchange="toggleCherryPickSection('${sectionId}CherryPickSection', '${sectionId}AddBtn')"> Cherry Pick Packages
+                            </label>
+                            <button id="${sectionId}AddBtn" style="display: none; background-color: #4CAF50; color: white; border: none; border-radius: 6px; width: 24px; height: 23px; font-size: 14px; text-align: center; padding: 0; cursor: pointer;">+</button>
+                        </div>
+                        <div id="${sectionId}CherryPickSection" style="display: none; margin-top: 10px;">
+                            <div class="form-group">
+                                <label><input type="checkbox" id="${sectionId}VsConfigPick" onchange="toggleInput('${sectionId}VsConfigPickInput')"> Vulcan Config</label>
+                                <div id="${sectionId}VsConfigPickInput" class="input-box">
+                                    <label for="${sectionId}VsConfigPickValue">Enter Vulcan Config cherry pick value:</label>
+                                    <textarea id="${sectionId}VsConfigPickValue" placeholder=""></textarea>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><input type="checkbox" id="${sectionId}DeployArtifactsPick" onchange="toggleInput('${sectionId}DeployArtifactsPickInput')"> Deploy Artifacts</label>
+                                <div id="${sectionId}DeployArtifactsPickInput" class="input-box">
+                                    <label for="${sectionId}DeployArtifactsPickValue">Enter Deploy Artifacts cherry pick value:</label>
+                                    <textarea id="${sectionId}DeployArtifactsPickValue" placeholder=""></textarea>
+                                </div>
+                            </div>
+                            <div id="${sectionId}DynamicInputs"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Event Listeners
+        // Ensure each "Add" button is only bound to its respective section once
+        document.getElementById('stowAddBtn').onclick = () => addDynamicInputs('stowDynamicInputs');
+        document.getElementById('bufferAddBtn').onclick = () => addDynamicInputs('bufferDynamicInputs');
+        document.getElementById('transferAddBtn').onclick = () => addDynamicInputs('transferDynamicInputs');
+
+        // Ensure add buttons are hidden on page load
+        document.getElementById('stowAddBtn').style.display = 'none';
+        document.getElementById('bufferAddBtn').style.display = 'none';
+        document.getElementById('transferAddBtn').style.display = 'none';
+
+        // Utility Functions
+        function toggleMainline() {
+            const stowMainlineCheckbox = document.getElementById('stowMainline');
+            const bufferMainlineCheckbox = document.getElementById('bufferMainline');
+            const transferMainlineCheckbox = document.getElementById('transferMainline');
+            
+            const mainlineValues = {
+                stow: stowMainlineCheckbox.checked ? '' : '--latest',
+                buffer: bufferMainlineCheckbox.checked ? '' : '--latest',
+                transfer: transferMainlineCheckbox.checked ? '' : '--latest'
+            };
+            
+            return mainlineValues;
+        }
+
+        function toggleInput(inputId) {
+            const inputBox = document.getElementById(inputId);
+            inputBox.style.display = inputBox.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            section.style.display = section.style.display === 'block' ? 'none' : 'block';
+        }
+        
+        function copyToClipboard(elementId) {
+            const codeElement = document.getElementById(elementId);
+            const textToCopy = codeElement.textContent;
+            
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => {
+                    const copyBtn = codeElement.parentElement.querySelector('.copy-btn');
+                    const originalText = copyBtn.textContent;
+                    
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                    }, 1500);
+                })
+                .catch(err => {
+                    console.error('Failed to copy text: ', err);
+                });
+        }
+        
+        function updateWorkspaceTitle() {
+            const testTitle = document.getElementById('testTitle').value || '[testTitle]';
+            const testDate = document.getElementById('testDate').value || '[date]';
+            const workspaceTitle = `${testDate}-${testTitle}`;
+            document.getElementById('workspaceTitle').value = workspaceTitle;
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', generateSteps); // Ensure the button is bound to the function
+
+        function generateSteps() {
+            // Get general values from inputs
+            const testTitle = document.getElementById('testTitle').value || '[testTitle]';
+            const testDate = document.getElementById('testDate').value || '[date]';
+            const workspace = document.getElementById('workspaceTitle').value || `${testDate}-${testTitle}`;
+            // get mainline value
+            const mainlineValues = toggleMainline();
+            const stowMainlineValue = mainlineValues.stow;
+            const bufferMainlineValue = mainlineValues.buffer;
+            const transferMainlineValue = mainlineValues.transfer;
+            //get event ID
+            const eventIdValue = document.getElementById('stowEventId').value;
+            const eventId = eventIdValue ? `--eventId ${eventIdValue}` : '';
+            const bufferEventIdValue = document.getElementById('bufferEventId').value;
+            const bufferEventId = bufferEventIdValue ? `--eventId ${bufferEventIdValue}` : '';
+            const transferEventIdValue = document.getElementById('transferEventId').value;
+            const transferEventId = transferEventIdValue ? `--eventId ${transferEventIdValue}` : '';
+            //get workcell ID
+            const stowWorkcellId = document.getElementById('stowWorkcellId').value || '[workcellId]'; 
+            const bufferWorkcellId = document.getElementById('bufferWorkcellId').value || '[workcellId]'; 
+            const transferWorkcellId = document.getElementById('transferWorkcellId').value || '[workcellId]';
+
+            // Reset tab visibility
+            document.getElementById('stowTabBtn').style.display = 'none';
+            document.getElementById('transferTabBtn').style.display = 'none';
+            document.getElementById('bufferTabBtn').style.display = 'none';
+
+            // Generate steps for Stow Section
+            
+            if (document.getElementById('stowCheckbox').checked) {
+                const sectionID = 'stow'; // Dynamically set sectionID
+                document.getElementById(`${sectionID}TabBtn`).style.display = 'inline-block';
+                toggleVulcanStowConfig(sectionID, `${sectionID}VsConfigPickInput`, `${sectionID}Vsconfig`);
+                const { packageNames, gitCommands } = getDynamicInputs(`${sectionID}DynamicInputs`);
+                const imageTag = getImageTagInput(sectionID, `${sectionID}ImageTagInput`);
+                const deployArtifacts = getDeployArtifactsInput(sectionID, `${sectionID}DeployArtifactsPickInput`);
+                const step2Packages = packageNames.length > 0 
+                    ? 'brazil ws --use' + packageNames.map(pkg => ` -p ${pkg}`).join(' ')
+                    : 'Move to next step';
+
+                const step4Commands = packageNames.length > 0 
+                    ? packageNames.map((pkg, index) => `
+cd ../${pkg}
+${gitCommands[index]}
+                    `).join('\n') + `
+cd ../..
+brazil-recursive-cmd --allPackages brazil-build
+                    `
+                    : 'cd ../..';
+
+                const step5Command = deployArtifacts;
+
+                const step6Command = imageTag 
+                    ? `sudo nano docker-compose.yaml\nTag image below:\n${imageTag}`
+                    : 'No image need to be tagged. Move to next step';
+                
+                const stowSteps = `
+                    <div class="step">${createStepHeader(1)}
+                        <code id="stowStep1">
+brazil ws create --versionset VulcanReorientStow/deployment_artifacts --name workspace-${workspace} ${eventId}
+cd workspace-${workspace}
+brazil ws --use --platform AL2_x86_64
+brazil setup platform-support --force
+brazil ws --use -p VulcanStowConfig -p VulcanReorientStowDeploymentArtifacts ${stowMainlineValue}
+                        </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep1')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(2)}
+                         <code id="stowStep2">
+${step2Packages}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep2')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(3)}
+                         <code id="stowStep3">
+cd src/VulcanStowConfig
+${window.stowVsconfig}
+brazil-build local beta NAFulfillment Atlas Lab ${stowWorkcellId}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep3')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(4)}
+                         <code id="stowStep4">
+${step4Commands}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep4')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(5)}
+                         <code id="stowStep5">
+cd src/VulcanReorientStowDeploymentArtifacts
+${step5Command}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep5')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(6)}
+                         <code id="stowStep6">
+${step6Command}
+                         </code>
+                    </div>
+                    <div class="step">${createStepHeader(7)}
+                         <code id="stowStep7">
+brazil-build
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep7')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(8)}
+                         <code id="stowStep8">
+sudo rsync -avzh -O --no-perms --no-owner --no-group --delete --stats --copy-links --exclude /build/private ./build/ /opt/carbon/stow/workflow-${workspace}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep8')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(9)}
+                         <code id="stowStep9">
+cd /opt/carbon/stow/workflow-${workspace}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep9')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(10)}
+                         <code id="stowStep10">
+./launch</code>
+                        <button class="copy-btn" onclick="copyToClipboard('stowStep10')">Copy</button>
+                    </div>
+                `;
+                document.getElementById('stowSteps').innerHTML = stowSteps;
+            }
+
+            // Generate steps for Buffer Section
+            if (document.getElementById('bufferCheckbox').checked) {
+                const sectionID = 'buffer'; // Dynamically set sectionID
+                document.getElementById(`${sectionID}TabBtn`).style.display = 'inline-block';
+                toggleVulcanStowConfig(sectionID, `${sectionID}VsConfigPickInput`, `${sectionID}Vsconfig`);
+                const { packageNames, gitCommands } = getDynamicInputs(`${sectionID}DynamicInputs`);
+                const imageTag = getImageTagInput(sectionID, `${sectionID}ImageTagInput`);
+                const deployArtifacts = getDeployArtifactsInput(sectionID, `${sectionID}DeployArtifactsPickInput`);
+                const step2Packages = packageNames.length > 0 
+                    ? 'brazil ws --use' + packageNames.map(pkg => ` -p ${pkg}`).join(' ')
+                    : 'Move to next step';
+
+                const step4Commands = packageNames.length > 0 
+                    ? packageNames.map((pkg, index) => `
+cd ../${pkg}
+${gitCommands[index]}
+                    `).join('\n') + `
+cd ../..
+brazil-recursive-cmd --allPackages brazil-build
+                    `
+                    : 'cd ../..';
+
+                const step5Command = deployArtifacts;
+
+                const step6Command = imageTag 
+                    ? `sudo nano docker-compose.yaml\nTag image below:\n${imageTag}`
+                    : 'No image need to be tagged. Move to next step';
+
+                const bufferSteps = `
+                    <div class="step">${createStepHeader(1)}
+                        <code id="bufferStep1">
+brazil ws create --versionset VulcanStowBuffer/deployment_artifacts --name workspace-${workspace} ${bufferEventId}
+cd workspace-${workspace}
+brazil ws --use --platform AL2_x86_64
+brazil setup platform-support --force
+brazil ws --use -p VulcanStowConfig -p VulcanStowBufferDeploymentArtifacts ${bufferMainlineValue}
+                        </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep1')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(2)}
+                         <code id="bufferStep2">
+${step2Packages}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep2')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(3)}
+                         <code id="bufferStep3">
+cd src/VulcanStowConfig
+${window.bufferVsconfig}
+brazil-build local beta NAFulfillment Atlas Lab ${bufferWorkcellId}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep3')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(4)}
+                         <code id="bufferStep4">
+${step4Commands}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep4')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(5)}
+                         <code id="bufferStep5">
+cd src/VulcanStowBufferDeploymentArtifacts
+${step5Command}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep5')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(6)}
+                         <code id="bufferStep6">
+${step6Command}
+                         </code>
+                    </div>
+                    <div class="step">${createStepHeader(7)}
+                         <code id="bufferStep7">
+brazil-build
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep7')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(8)}
+                         <code id="bufferStep8">
+sudo rsync -avzh -O --no-perms --no-owner --no-group --delete --stats --copy-links --exclude /build/private ./build/ /opt/carbon/buffer/workflow-${workspace}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep8')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(9)}
+                         <code id="bufferStep9">
+cd /opt/carbon/buffer/workflow-${workspace}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep9')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(10)}
+                         <code id="bufferStep9">
+./launch</code>
+                        <button class="copy-btn" onclick="copyToClipboard('bufferStep9')">Copy</button>
+                    </div>
+                `;
+                document.getElementById('bufferSteps').innerHTML = bufferSteps;
+            }
+
+            // Generate steps for Transfer Section
+            if (document.getElementById('transferCheckbox').checked) {
+                const sectionID = 'transfer'; // Dynamically set sectionID
+                document.getElementById(`${sectionID}TabBtn`).style.display = 'inline-block';
+                toggleVulcanStowConfig(sectionID, `${sectionID}VsConfigPickInput`, `${sectionID}Vsconfig`);
+                const { packageNames, gitCommands } = getDynamicInputs(`${sectionID}DynamicInputs`);
+                const imageTag = getImageTagInput(sectionID, `${sectionID}ImageTagInput`);
+                const deployArtifacts = getDeployArtifactsInput(sectionID, `${sectionID}DeployArtifactsPickInput`);
+                const step2Packages = packageNames.length > 0 
+                    ? 'brazil ws --use' + packageNames.map(pkg => ` -p ${pkg}`).join(' ')
+                    : 'Move to next step';
+
+                const step4Commands = packageNames.length > 0 
+                    ? packageNames.map((pkg, index) => `
+cd ../${pkg}
+${gitCommands[index]}
+                    `).join('\n') + `
+cd ../..
+brazil-recursive-cmd --allPackages brazil-build
+                    `
+                    : 'cd ../..';
+
+                const step5Command = deployArtifacts;
+
+                const step6Command = imageTag 
+                    ? `sudo nano docker-compose.yaml\nTag image below:\n${imageTag}`
+                    : 'No image need to be tagged. Move to next step';
+
+                const transferSteps = `
+                    <div class="step">${createStepHeader(1)}
+                        <code id="transferStep1">
+brazil ws create --versionset VulcanInductAndTransfer/deployment_artifacts --name workspace-${workspace} ${transferEventId}
+cd workspace-${workspace}
+brazil ws --use --platform AL2_x86_64
+brazil setup platform-support --force
+brazil ws --use -p VulcanStowConfig -p VulcanInductTransferDeploymentArtifacts ${transferMainlineValue}
+                        </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep1')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(2)}
+                         <code id="transferStep2">
+${step2Packages}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep2')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(3)}
+                         <code id="transferStep3">
+cd src/VulcanStowConfig
+${window.transferVsconfig}
+brazil-build local beta NAFulfillment Atlas Lab ${transferWorkcellId}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep3')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(4)}
+                         <code id="transferStep4">
+${step4Commands}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep4')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(5)}
+                         <code id="transferStep5">
+cd src/VulcanInductTransferDeploymentArtifacts
+${step5Command}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep5')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(6)}
+                         <code id="transferStep6">
+${step6Command}
+                         </code>
+                    </div>
+                    <div class="step">${createStepHeader(7)}
+                         <code id="transferStep7">
+brazil-build
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep7')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(8)}
+                         <code id="transferStep8">
+sudo rsync -avzh -O --no-perms --no-owner --no-group --delete --stats --copy-links --exclude /build/private ./build/ /opt/carbon/induct_transfer/workflow-${workspace}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep8')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(9)}
+                         <code id="transferStep9">
+cd /opt/carbon/induct_transfer/workflow-${workspace}
+                         </code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep9')">Copy</button>
+                    </div>
+                    <div class="step">${createStepHeader(10)}
+                         <code id="transferStep10">
+./launch</code>
+                        <button class="copy-btn" onclick="copyToClipboard('transferStep10')">Copy</button>
+                    </div>
+                `;
+                document.getElementById('transferSteps').innerHTML = transferSteps;
+            }
+
+            // Show the steps guide
+            document.getElementById('stepsGuide').style.display = 'block';
+            document.getElementById('generateBtn').style.display = 'none';
+            document.getElementById('resetBtn').style.display = 'inline-block';
+
+            // Automatically open the first visible tab
+            const firstVisibleTab = document.querySelector('.tab button[style*="inline-block"]');
+            if (firstVisibleTab) {
+                firstVisibleTab.click();
+            }
+        }
+
+        function openTab(evt, tabName) {
+            // Hide all tab contents
+            const tabContents = document.getElementsByClassName('tabcontent');
+            for (let i = 0; i < tabContents.length; i++) {
+                tabContents[i].style.display = 'none';
+            }
+
+            // Remove active class from all tab links
+            const tabLinks = document.getElementsByClassName('tablinks');
+            for (let i = 0; i < tabLinks.length; i++) {
+                tabLinks[i].className = tabLinks[i].className.replace(' active', '');
+            }
+
+            // Show the current tab and add active class
+            document.getElementById(tabName).style.display = 'block';
+            evt.currentTarget.className += ' active';
+        }
+
+        function resetForm() {
+            // Hide steps and show form
+            document.getElementById('stepsGuide').style.display = 'none';
+            document.getElementById('generateBtn').style.display = 'inline-block';
+            document.getElementById('resetBtn').style.display = 'none';
+
+            // Reset all form fields
+            document.getElementById('testTitle').value = '';
+            document.getElementById('testDate').value = '';
+            document.getElementById('workspaceTitle').value = '';
+
+            // Reset all sections
+            ['stow', 'buffer', 'transfer'].forEach(section => {
+                // Reset checkboxes
+                document.getElementById(`${section}Checkbox`).checked = false;
+                document.getElementById(`${section}Section`).style.display = 'none';
+                document.getElementById(`${section}Mainline`).checked = false;
+                document.getElementById(`${section}VsConfigPick`).checked = false;
+                document.getElementById(`${section}ImageTag`).checked = false;
+                document.getElementById(`${section}CherryPick`).checked = false;
+                document.getElementById(`${section}DeployArtifactsPick`).checked = false;
+
+                // Reset input values
+                document.getElementById(`${section}EventId`).value = '';
+                document.getElementById(`${section}WorkcellId`).value = '';
+                document.getElementById(`${section}VsConfigPickValue`).value = '';
+                document.getElementById(`${section}ImageTagValue`).value = '';
+                document.getElementById(`${section}DeployArtifactsPickValue`).value = '';
+
+                // Reset input boxes display
+                document.getElementById(`${section}VsConfigPickInput`).style.display = 'none';
+                document.getElementById(`${section}ImageTagInput`).style.display = 'none';
+                document.getElementById(`${section}DeployArtifactsPickInput`).style.display = 'none';
+                document.getElementById(`${section}CherryPickSection`).style.display = 'none';
+                document.getElementById(`${section}AddBtn`).style.display = 'none';
+
+                // Clear dynamic inputs
+                const dynamicInputsContainer = document.getElementById(`${section}DynamicInputs`);
+                while (dynamicInputsContainer.firstChild) {
+                    dynamicInputsContainer.removeChild(dynamicInputsContainer.firstChild);
+                }
+
+                // Clear steps content
+                document.getElementById(`${section}Steps`).innerHTML = '';
+                document.getElementById(`${section}TabBtn`).style.display = 'none';
+            });
+
+            // Clear any global variables used for configs
+            window.stowVsconfig = '';
+            window.bufferVsconfig = '';
+            window.transferVsconfig = '';
+        }
+
+        function toggleCherryPickSection(sectionId, buttonId) {
+            const section = document.getElementById(sectionId);
+            const button = document.getElementById(buttonId);
+            const isVisible = section.style.display === 'block';
+            section.style.display = isVisible ? 'none' : 'block';
+            button.style.display = isVisible ? 'none' : 'inline-block';
+        }
+
+        function addDynamicInputs(sectionId) {
+            const section = document.getElementById(sectionId);
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'form-group dynamic-input-group';
+            inputGroup.innerHTML = `
+                <label>Enter Package Name:</label>
+                <input type="text" placeholder="Beware case sensitive">
+                <label>Cherry Pick Command:</label>
+                <textarea placeholder="Paste Cherry Pick here"></textarea>
+                <button class="delete-btn" onclick="deleteDynamicInput(this)" style="background-color: #f44336; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer;">Delete</button>
+            `;
+            section.appendChild(inputGroup);
+        }
+
+        // Ensure each "Add" button is only bound to its respective section once
+        document.getElementById('stowAddBtn').onclick = () => addDynamicInputs('stowDynamicInputs');
+        document.getElementById('bufferAddBtn').onclick = () => addDynamicInputs('bufferDynamicInputs');
+        document.getElementById('transferAddBtn').onclick = () => addDynamicInputs('transferDynamicInputs');
+
+        function deleteDynamicInput(button) {
+            const inputGroup = button.parentElement;
+            inputGroup.remove();
+        }
+
+        function toggleAddButton(checkboxId, buttonId) {
+            const checkbox = document.getElementById(checkboxId);
+            const button = document.getElementById(buttonId);
+            button.style.display = checkbox.checked ? 'inline-block' : 'none';
+        }
+
+        document.getElementById('stowCherryPick').addEventListener('change', () => toggleAddButton('stowCherryPick', 'stowAddBtn'));
+        document.getElementById('bufferCherryPick').addEventListener('change', () => toggleAddButton('bufferCherryPick', 'bufferAddBtn'));
+        document.getElementById('transferCherryPick').addEventListener('change', () => toggleAddButton('transferCherryPick', 'transferAddBtn'));
+
+        // Ensure add buttons are hidden on page load
+
+        document.getElementById('stowCherryPick').addEventListener('change', () => toggleAddButton('stowCherryPick', 'stowAddBtn'));
+        document.getElementById('bufferCherryPick').addEventListener('change', () => toggleAddButton('bufferCherryPick', 'bufferAddBtn'));
+        document.getElementById('transferCherryPick').addEventListener('change', () => toggleAddButton('transferCherryPick', 'transferAddBtn'));
+
+        // Ensure add buttons are hidden on page load
+        document.getElementById('stowAddBtn').style.display = 'none';
+        document.getElementById('bufferAddBtn').style.display = 'none';
+        document.getElementById('transferAddBtn').style.display = 'none';
+
+        function getDynamicInputs(sectionId) {
+            const packageNames = [];
+            const gitCommands = [];
+            const inputGroups = document.querySelectorAll(`#${sectionId} .dynamic-input-group`);
+            
+            inputGroups.forEach(group => {
+                const packageName = group.querySelector('input[type="text"]').value.trim();
+                const gitCommand = group.querySelector('textarea').value.trim();
+                if (packageName && gitCommand) {
+                    packageNames.push(packageName);
+                    gitCommands.push(gitCommand);
+                }
+            });
+            return { packageNames, gitCommands };
+        }
+
+        function toggleVulcanStowConfig(sectionId, inputBoxId, variableName) {
+            const checkbox = document.getElementById(`${sectionId}VsConfigPick`);
+            const inputBox = document.getElementById(inputBoxId);
+            let vsconfig = '';
+
+            if (checkbox.checked) {
+                inputBox.style.display = 'block';
+                vsconfig = document.getElementById(`${sectionId}VsConfigPickValue`).value.trim();
+            } else {
+                inputBox.style.display = 'none';
+                vsconfig = '';
+            }
+
+            window[variableName] = vsconfig; // Store the value in a global variable dynamically
+        }
+
+        // Add reusable function to get image tag input
+        function getImageTagInput(sectionId, inputBoxId) {
+            const checkbox = document.getElementById(`${sectionId}ImageTag`);
+            const inputBox = document.getElementById(inputBoxId);
+            let imageTag = '';
+
+            if (checkbox.checked) {
+                imageTag = document.getElementById(`${sectionId}ImageTagValue`).value.trim();
+            }
+
+            return imageTag;
+        }
+
+        // Add reusable function to get deploy artifacts input
+        function getDeployArtifactsInput(sectionId, inputBoxId) {
+            const checkbox = document.getElementById(`${sectionId}DeployArtifactsPick`);
+            const inputBox = document.getElementById(inputBoxId);
+            let deployArtifacts = '';
+
+            if (checkbox.checked) {
+                deployArtifacts = document.getElementById(`${sectionId}DeployArtifactsPickValue`).value.trim();
+            }
+
+            return deployArtifacts;
+        }
+
+        // Add these functions at the end of the script section
+        function toggleTroubleshoot() {
+            const panel = document.getElementById('troubleshootPanel');
+            if (panel.style.display === 'none' || !panel.style.display) {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
