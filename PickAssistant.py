@@ -2,6 +2,8 @@
 """
     Pick Assistant Tool:
     Authors: djoneben (Ben Jones), grsjoshu (Joshua Green), & (Tri Nguyen) ftnguyen
+    v1.17.
+        Use OLAF instead of human annotations.
     v1.15:
         Added pod barcode database to automatically look up the pod name. 
     v1.14:
@@ -28,7 +30,7 @@ import os
 import argparse
 import time
 
-print ("PickAssistant v1.15")
+print ("PickAssistant v1.17")
 
 WindowsDebug = False # switch to False if you are on a workcell. 
 
@@ -186,30 +188,30 @@ isDone = False
 while not isDone:
     i=1
     StowedItems={}
-    wrongStows={}
+    AttemptedStows={}
+
     cycles = 0
 
     while os.path.isdir(file_path+podID+temp+str(i)):
         if WindowsDebug:
-            annotation_file_path = file_path+podID+'\\cycle_'+str(i)+'\\dynamic_1\\annotation_annotation.data.json'
+            annotation_file_path = file_path+podID+'\\cycle_'+str(i)+'\\auto_annotation\\_olaf_primary_annotation.data.json'
             stow_location_file_path = file_path+podID+'\\cycle_'+str(i)+'\\dynamic_1\\match_output.data.json'
         else:
-            annotation_file_path = file_path+podID+'/cycle_'+str(i)+'/dynamic_1/annotation_annotation.data.json'
+            annotation_file_path = file_path+podID+'/cycle_'+str(i)+'/auto_annotation/_olaf_primary_annotation.data.json'
             stow_location_file_path = file_path+podID+'/cycle_'+str(i)+'/dynamic_1/match_output.data.json'
         AnnotationData = read_json_file(annotation_file_path)
         StowData = read_json_file(stow_location_file_path)
 
         #If data exists add it to the nested dictionary.
-        if AnnotationData:
-            if StowData:
-                cycles+=1
-                if StowData["binId"]:
-                    if AnnotationData["isStowedItemInBin"]:
-                        StowedItems['/cycle_'+str(i)]={"itemFcsku":StowData["itemFcsku"],"binId":StowData["binId"],"binScannableId":StowData["binScannableId"]}
-                    elif AnnotationData["vpmWrongBin"]:
-                        wrongStows['/cycle_'+str(i)]={"itemFcsku":StowData["itemFcsku"],"binId":StowData["binId"],"binScannableId":StowData["binScannableId"]}
+        if StowData:
+            cycles+=1
+            if StowData["binId"]:
+                if AnnotationData and AnnotationData["isStowedItemInBin"]:
+                    StowedItems['/cycle_'+str(i)]={"itemFcsku":StowData["itemFcsku"],"binId":StowData["binId"],"binScannableId":StowData["binScannableId"]}
                 else:
-                    print("cycle_"+str(i)+" does not have a bin ID.")
+                    AttemptedStows['/cycle_'+str(i)]={"itemFcsku":StowData["itemFcsku"],"binId":StowData["binId"],"binScannableId":StowData["binScannableId"]}
+            else:
+                print("cycle_"+str(i)+" does not have a bin ID.")
         i += 1
     if cycles >= TrueCycleCount and not os.path.isdir(file_path+podID+temp+str(i+1)):
         isDone = True
@@ -260,10 +262,10 @@ for item in StowedItems:
     itemss.append([StowedItems[item]["binId"],StowedItems[item]["itemFcsku"]])
 itemss.sort(key=lambda x: x[0][-1]+x[0][-2])
 
-#Adds / reorders the list of adjacent bin stows. 
+#Adds / reorders the list of likely failed stows. 
 bitemss = []
-for item in wrongStows:
-    bitemss.append([wrongStows[item]["binId"],wrongStows[item]["itemFcsku"]])
+for item in AttemptedStows:
+    bitemss.append([AttemptedStows[item]["binId"],AttemptedStows[item]["itemFcsku"]])
 bitemss.sort(key=lambda x: x[0][-1]+x[0][-2])
 
 #Adds successfull stowed items to the output Barcode : Location 
@@ -274,7 +276,7 @@ i_count = len(itemss)
 
 #Adds stowed to adjacent bin items to 
 if bitemss:
-    output += "\nStows to wrong bin:\n"
+    output += "\nBins where stows were attempted but likely not successful:\n"
     for item in bitemss:
         output += f"{item[1]} : {item[0]}\n"
 
