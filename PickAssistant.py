@@ -303,7 +303,7 @@ def upload_to_cleans_collection():
         import uuid
 
         # MongoDB connection string with provided credentials
-        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@podmanagement.yv8dt9t.mongodb.net"
+        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@podmanagement.yv8dt9t.mongodb.net?retryWrites=true&w=majority"
 
         # Connect to MongoDB
         client = MongoClient(connection_string)
