@@ -5,14 +5,14 @@
     v1.17.
         Use OLAF instead of human annotations.
     v1.15:
-        Added pod barcode database to automatically look up the pod name. 
+        Added pod barcode database to automatically look up the pod name.
     v1.14:
         Fixed bug in string construction caused by a file not being generated on Ubuntu 24
     v1.13:
         Fixed bug in argument parser
     v1:12:
         Fixed cycle loop runaway logic.
-        Reenabled SSH functionality. 
+        Reenabled SSH functionality.
     v1.11:
         Loop the program if missing data.
     v1.10:
@@ -21,7 +21,7 @@
         Added in checks to alert potencial data loss.
     v1.8:
         Added Better comments.
-        More accurate cycle count. 
+        More accurate cycle count.
         Tidied up the code to make it readable.
 """
 
@@ -32,7 +32,7 @@ import time
 
 print ("PickAssistant v1.17")
 
-WindowsDebug = False # switch to False if you are on a workcell. 
+WindowsDebug = False # switch to False if you are on a workcell.
 
 podBarcodeDatabase = {
     "HB05101914818 H12-A" : "Ninja Turtle",
@@ -166,7 +166,7 @@ else:
     file_path = '/home/local/carbon/archive/'+orchestrator+'/'
     podBarcode = read_json_file(file_path+podID+"/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json")
 
-#Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database. 
+#Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
 if podBarcode in podBarcodeDatabase:
     PodName= podBarcodeDatabase[podBarcode]
 if PodName=="":
@@ -243,7 +243,7 @@ for items in StowedItems:
     bin = StowedItems[items]["binId"][-2:]
     stowedPodFace[13-(ord(bin[1])-ord('a'))][int(bin[0])].append(StowedItems[items]["itemFcsku"])
     print (items," - ",StowedItems[items]["itemFcsku"]," - ",StowedItems[items]["binId"]," - ",StowedItems[items]["binScannableId"])
-   
+
 #Builds Bin toltals into a 2d Array.
 for row in range(len(stowedPodFace)):
         if row > 0:
@@ -256,34 +256,38 @@ for row in range(len(stowedPodFace)):
 output = "Pod: "+str(PodName)+"\n"+podBarcode+"\n\n"+"Orchestrator: "+str(orchestrator+"/"+podID)+"\n\n"+str(printPod(StowedTotal))
 output += "\n"
 
-#Adds / reorders the list of items into bin location by alphabetic order first then numerical. 
+upload = podBarcode + podID # prepare for upload podInfo to database
+
+#Adds / reorders the list of items into bin location by alphabetic order first then numerical.
 itemss=[]
 for item in StowedItems:
     itemss.append([StowedItems[item]["binId"],StowedItems[item]["itemFcsku"]])
 itemss.sort(key=lambda x: x[0][-1]+x[0][-2])
 
-#Adds / reorders the list of likely failed stows. 
+#Adds / reorders the list of likely failed stows.
 bitemss = []
 for item in AttemptedStows:
     bitemss.append([AttemptedStows[item]["binId"],AttemptedStows[item]["itemFcsku"]])
 bitemss.sort(key=lambda x: x[0][-1]+x[0][-2])
 
-#Adds successfull stowed items to the output Barcode : Location 
+#Adds successfull stowed items to the output Barcode : Location
 for i in itemss:
     output += f"{i[1]} : {i[0]}\n"
-
+    upload += f"{i[1]}:{i[0]}\n"
 i_count = len(itemss)
 
-#Adds stowed to adjacent bin items to 
+#Adds stowed to adjacent bin items to
 if bitemss:
     output += "\nBins where stows were attempted but likely not successful:\n"
+    upload += "\nAmbient Stows:\n"
     for item in bitemss:
         output += f"{item[1]} : {item[0]}\n"
+        upload += f"{item[1]}:{item[0]}\n"
 
 output += f"\n{i_count}/{cycles} {round((i_count/cycles*100),2)}%"
 
 print ("")
-print (output)  
+print (output)
 
 if TrueCycleCount > cycles:
     print ("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount-cycles),"cycles unaccounted for.")
@@ -296,3 +300,92 @@ if not WindowsDebug:
         p.communicate(input=text.encode('utf-8'))
 
     copy2clip(output)
+
+#Upload to database
+def upload_to_cleans_collection():
+    try:
+        from pymongo import MongoClient
+        from datetime import datetime
+        import uuid
+
+        # MongoDB connection string with provided credentials
+        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@cluster0.mongodb.net/?retryWrites=true&w=majority"
+
+        # Connect to MongoDB
+        client = MongoClient(connection_string)
+
+        # Select database and collection
+        db = client['podmanagement']  # Adjust database name as needed
+        cleans_collection = db['cleans']
+
+        # Prepare cleaning data document
+        clean_document = {
+            "_id": str(uuid.uuid4()),  # Generate unique ID
+            "podBarcode": podBarcode,
+            "podName": PodName,
+            "orchestratorId": orchestrator,
+            "podId": podID,
+            "cycleCount": cycles,
+            "trueCycleCount": TrueCycleCount,
+            "stowedItems": [],
+            "attemptedStows": [],
+            "cleaningTimestamp": datetime.utcnow(),
+            "status": "cleaned",
+            "successRate": round((i_count/cycles*100), 2) if cycles > 0 else 0,
+            "totalItems": i_count,
+            "binData": {},
+            "rawOutput": output
+        }
+
+        # Add stowed items data
+        for item_data in itemss:
+            clean_document["stowedItems"].append({
+                "itemFcsku": item_data[1],
+                "binId": item_data[0],
+                "status": "stowed"
+            })
+
+        # Add attempted stows data
+        for item_data in bitemss:
+            clean_document["attemptedStows"].append({
+                "itemFcsku": item_data[1],
+                "binId": item_data[0],
+                "status": "attempted"
+            })
+
+        # Add bin data from the stowedPodFace structure
+        for row_idx, row in enumerate(stowedPodFace):
+            if row_idx > 0:  # Skip header row
+                row_letter = row[0]
+                for col_idx in range(1, len(row)):
+                    if row[col_idx]:  # If bin has items
+                        bin_id = f"{col_idx}{row_letter}"
+                        clean_document["binData"][bin_id] = {
+                            "itemCount": len(row[col_idx]) if isinstance(row[col_idx], list) else row[col_idx],
+                            "items": row[col_idx] if isinstance(row[col_idx], list) else []
+                        }
+
+        # Insert document into cleans collection
+        result = cleans_collection.insert_one(clean_document)
+
+        print(f"\n✓ Successfully uploaded cleaning data to MongoDB 'cleans' collection")
+        print(f"  Document ID: {result.inserted_id}")
+        print(f"  Pod: {PodName} ({podBarcode})")
+        print(f"  Items processed: {i_count}/{cycles}")
+
+        # Close connection
+        client.close()
+
+        return True
+
+    except ImportError:
+        print("\n! PyMongo not installed. Install with: pip install pymongo")
+        return False
+    except Exception as e:
+        print(f"\n! Error uploading to MongoDB cleans collection: {e}")
+        return False
+
+# Execute the upload function
+if __name__ == "__main__":
+    # Call the upload function after all data processing is complete
+    upload_success = upload_to_cleans_collection()
