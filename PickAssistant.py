@@ -303,7 +303,7 @@ def upload_to_cleans_collection():
         import uuid
 
         # MongoDB connection string with provided credentials
-        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@podmanagement.yv8dt9t.mongodb.net?retryWrites=true&w=majority"
+        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@podmanagement.yv8dt9t.mongodb.net/?retryWrites=true&w=majority"
 
         # Connect to MongoDB
         client = MongoClient(connection_string)
@@ -321,19 +321,27 @@ def upload_to_cleans_collection():
                 podType = after_space.split("-")[0]
             except (IndexError, AttributeError):
                 podType = "Unknown"
+        orchestratorID = orchestrator + "/" + podID
+        uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Get system environment variables
+        user = os.environ.get('USER')
+        station = os.environ.get('STATION')
 
         clean_document = {
             "_id": str(uuid.uuid4()),  # Generate unique ID
             "podBarcode": podBarcode,
             "podName": PodName,
-            "orchestratorId": orchestrator,
-            "podFace": podFace,
+            "orchestratorId": orchestratorID,
             "podType": podType,
+            "podFace": podFace,
             "stowedItems": [],
             "attemptedStows": [],
-            "cleaningTimestamp": datetime.datetime.now(datetime.timezone.utc),
+            "uploadAt": uploadedAT,
             "status": "incomplete",
-            "totalItems": i_count
+            "totalItems": i_count,
+            "user": user,
+            "station": station,
+            "completedAt": None
         }
 
         # Add stowed items data
