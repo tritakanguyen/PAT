@@ -255,9 +255,6 @@ for row in range(len(stowedPodFace)):
 
 output = "Pod: "+str(PodName)+"\n"+podBarcode+"\n\n"+"Orchestrator: "+str(orchestrator+"/"+podID)+"\n\n"+str(printPod(StowedTotal))
 output += "\n"
-
-upload = podBarcode + podID # prepare for upload podInfo to database
-
 #Adds / reorders the list of items into bin location by alphabetic order first then numerical.
 itemss=[]
 for item in StowedItems:
@@ -273,16 +270,13 @@ bitemss.sort(key=lambda x: x[0][-1]+x[0][-2])
 #Adds successfull stowed items to the output Barcode : Location
 for i in itemss:
     output += f"{i[1]} : {i[0]}\n"
-    upload += f"{i[1]}:{i[0]}\n"
 i_count = len(itemss)
 
 #Adds stowed to adjacent bin items to
 if bitemss:
     output += "\nBins where stows were attempted but likely not successful:\n"
-    upload += "\nAmbient Stows:\n"
     for item in bitemss:
         output += f"{item[1]} : {item[0]}\n"
-        upload += f"{item[1]}:{item[0]}\n"
 
 output += f"\n{i_count}/{cycles} {round((i_count/cycles*100),2)}%"
 
@@ -309,32 +303,37 @@ def upload_to_cleans_collection():
         import uuid
 
         # MongoDB connection string with provided credentials
-        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@cluster0.mongodb.net/?retryWrites=true&w=majority"
+        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@podmanagement.yv8dt9t.mongodb.net"
 
         # Connect to MongoDB
         client = MongoClient(connection_string)
 
         # Select database and collection
-        db = client['podmanagement']  # Adjust database name as needed
+        db = client['podManagement']
         cleans_collection = db['cleans']
 
         # Prepare cleaning data document
+        if podBarcode and " " in podBarcode and "-" in podBarcode:
+            try:
+                # Split by space and get the part after space, then split by hyphen and get first part
+                after_space = podBarcode.split(" ")[1]
+                podFace = after_space.split("-")[1]
+                podType = after_space.split("-")[0]
+            except (IndexError, AttributeError):
+                podType = "Unknown"
+
         clean_document = {
             "_id": str(uuid.uuid4()),  # Generate unique ID
             "podBarcode": podBarcode,
             "podName": PodName,
             "orchestratorId": orchestrator,
-            "podId": podID,
-            "cycleCount": cycles,
-            "trueCycleCount": TrueCycleCount,
+            "podFace": podFace,
+            "podType": podType,
             "stowedItems": [],
             "attemptedStows": [],
-            "cleaningTimestamp": datetime.utcnow(),
-            "status": "cleaned",
-            "successRate": round((i_count/cycles*100), 2) if cycles > 0 else 0,
-            "totalItems": i_count,
-            "binData": {},
-            "rawOutput": output
+            "cleaningTimestamp": datetime.datetime.now(datetime.timezone.utc),
+            "status": "incomplete",
+            "totalItems": i_count
         }
 
         # Add stowed items data
@@ -352,18 +351,6 @@ def upload_to_cleans_collection():
                 "binId": item_data[0],
                 "status": "attempted"
             })
-
-        # Add bin data from the stowedPodFace structure
-        for row_idx, row in enumerate(stowedPodFace):
-            if row_idx > 0:  # Skip header row
-                row_letter = row[0]
-                for col_idx in range(1, len(row)):
-                    if row[col_idx]:  # If bin has items
-                        bin_id = f"{col_idx}{row_letter}"
-                        clean_document["binData"][bin_id] = {
-                            "itemCount": len(row[col_idx]) if isinstance(row[col_idx], list) else row[col_idx],
-                            "items": row[col_idx] if isinstance(row[col_idx], list) else []
-                        }
 
         # Insert document into cleans collection
         result = cleans_collection.insert_one(clean_document)
