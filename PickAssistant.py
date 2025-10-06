@@ -340,8 +340,7 @@ def upload_to_cleans_collection():
             "status": "incomplete",
             "totalItems": i_count,
             "user": user,
-            "station": station,
-            "completedAt": None
+            "station": station
         }
 
         # Add stowed items data
@@ -384,3 +383,4 @@ def upload_to_cleans_collection():
 if __name__ == "__main__":
     # Call the upload function after all data processing is complete
     upload_success = upload_to_cleans_collection()
+
