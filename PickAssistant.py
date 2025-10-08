@@ -284,10 +284,10 @@ def run_pick_assistant():
     StowedTotal= stowedPodFace
 
     #Storing item barcodes in arrays associated with its bin location in a 2d array mockup of the pod.
-    for items in StowedItems:
-        bin = StowedItems[items]["binId"][-2:]
-        stowedPodFace[13-(ord(bin[1])-ord('a'))][int(bin[0])].append(StowedItems[items]["itemFcsku"])
-        print (items," - ",StowedItems[items]["itemFcsku"]," - ",StowedItems[items]["binId"]," - ",StowedItems[items]["binScannableId"])
+    # for items in StowedItems:
+    #     bin = StowedItems[items]["binId"][-2:]
+    #     stowedPodFace[13-(ord(bin[1])-ord('a'))][int(bin[0])].append(StowedItems[items]["itemFcsku"])
+    #     print (items," - ",StowedItems[items]["itemFcsku"]," - ",StowedItems[items]["binId"]," - ",StowedItems[items]["binScannableId"])
 
     #Builds Bin toltals into a 2d Array.
     for row in range(len(stowedPodFace)):
