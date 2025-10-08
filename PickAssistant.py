@@ -164,7 +164,7 @@ args = parser.parse_args()
 orchestrator=args.orchestrator
 podID=args.podid
 PodName=args.podname
-TrueCycleCount = int(args.cyclecount)
+TrueCycleCount = int(args.cycle)
 benchmark_mode = args.benchmark
 
 # Wrap the main logic in a loop if benchmark mode is enabled
