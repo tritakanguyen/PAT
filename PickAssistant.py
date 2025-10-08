@@ -221,28 +221,17 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
     # Set Pod ID / Check if Pod ID was not provided with the orchestrator. If not ask for the index with a default of 1.
     if podID == "":
-        inputt = input("What is the pod index? ").strip()
-        if inputt == "":
-            # Default to pod_1 if user just presses Enter
-            podID = "pod_1"
-        elif inputt.isdigit() and int(inputt) > 0:
+        inputt = input("What is the pod index? ")
+        if inputt.isdigit():
             podID = "pod_" + str(inputt)
         else:
-            logger.warning("Invalid input, using default pod_1")
             podID = "pod_1"
 
     # Inquire about total cycles to prevent data loss.
     if TrueCycleCount == 0:
-        inputt = input("Please enter the total cycle count: ").strip()
-        if inputt == "":
-            # Allow empty input - will be validated later in the cycle loop
-            logger.warning("No cycle count provided, will determine from available data")
-            TrueCycleCount = 0
-        elif inputt.isdigit() and int(inputt) > 0:
+        inputt = input("Please enter the total cycle count: ")
+        if inputt.isdigit():
             TrueCycleCount = int(inputt)
-        else:
-            logger.error("Invalid cycle count provided")
-            return False
 
     # Get the Pod Barcode from generated files. If the files do not exist then the program will print a crash report to terminal.
     if WindowsDebug:
@@ -252,20 +241,13 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         file_path = '/home/local/carbon/archive/' + orchestrator + '/'
         podBarcode = read_json_file(file_path + podID + "/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json")
 
-    if not podBarcode:
-        logger.error("Could not read pod barcode from file")
-        return False
-
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
     if podBarcode in POD_BARCODE_DATABASE:
         PodName = POD_BARCODE_DATABASE[podBarcode]
     if PodName == "":
-        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ").strip()
-        if not PodName:
-            logger.error("Pod name cannot be empty")
-            return False
+        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
     else:
-        logger.info(f"{PodName} was found via the barcode")
+        print(PodName, " was found via the barcode")
 
     # Get Pod barcode/ID
     if WindowsDebug:
@@ -312,21 +294,12 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                             "binScannableId": StowData.get("binScannableId")
                         }
                 else:
-                    logger.warning(f"cycle_{i} does not have a bin ID.")
+                    print("cycle_" + str(i) + " does not have a bin ID.")
             i += 1
-
-        # Check if we have all expected cycles or if no cycle count was specified
-        if TrueCycleCount == 0:
-            # No cycle count specified, just process all available cycles
-            if not os.path.isdir(file_path + podID + temp + str(i + 1)):
-                isDone = True
-            else:
-                logger.info(f"Found {cycles} cycles so far, checking for more...")
-                time.sleep(1)
-        elif cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
+        if cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
             isDone = True
         else:
-            logger.info(f"Cycles missing ({cycles}/{TrueCycleCount}), retrying...")
+            print("Cycles missing (", cycles, "/", TrueCycleCount, "), retrying...")
             time.sleep(1)
 
     # Adds / reorders the list of items into bin location by alphabetic order first then numerical.
@@ -343,10 +316,8 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
     i_count = len(itemss)
 
-    if TrueCycleCount > 0 and TrueCycleCount > cycles:
-        logger.warning(f"\n\n!!! Missing Cycle Data !!!   There are {TrueCycleCount - cycles} cycles unaccounted for.")
-    elif TrueCycleCount == 0:
-        logger.info(f"Processed {cycles} cycles (no cycle count specified)")
+    if TrueCycleCount > cycles:
+        print("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount - cycles), "cycles unaccounted for.")
 
     # Upload to database
     def upload_to_cleans_collection():
