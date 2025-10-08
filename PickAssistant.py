@@ -222,7 +222,10 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     # Set Pod ID / Check if Pod ID was not provided with the orchestrator. If not ask for the index with a default of 1.
     if podID == "":
         inputt = input("What is the pod index? ").strip()
-        if inputt.isdigit() and int(inputt) > 0:
+        if inputt == "":
+            # Default to pod_1 if user just presses Enter
+            podID = "pod_1"
+        elif inputt.isdigit() and int(inputt) > 0:
             podID = "pod_" + str(inputt)
         else:
             logger.warning("Invalid input, using default pod_1")
@@ -231,7 +234,11 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     # Inquire about total cycles to prevent data loss.
     if TrueCycleCount == 0:
         inputt = input("Please enter the total cycle count: ").strip()
-        if inputt.isdigit() and int(inputt) > 0:
+        if inputt == "":
+            # Allow empty input - will be validated later in the cycle loop
+            logger.warning("No cycle count provided, will determine from available data")
+            TrueCycleCount = 0
+        elif inputt.isdigit() and int(inputt) > 0:
             TrueCycleCount = int(inputt)
         else:
             logger.error("Invalid cycle count provided")
@@ -307,7 +314,16 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                 else:
                     logger.warning(f"cycle_{i} does not have a bin ID.")
             i += 1
-        if cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
+
+        # Check if we have all expected cycles or if no cycle count was specified
+        if TrueCycleCount == 0:
+            # No cycle count specified, just process all available cycles
+            if not os.path.isdir(file_path + podID + temp + str(i + 1)):
+                isDone = True
+            else:
+                logger.info(f"Found {cycles} cycles so far, checking for more...")
+                time.sleep(1)
+        elif cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
             isDone = True
         else:
             logger.info(f"Cycles missing ({cycles}/{TrueCycleCount}), retrying...")
@@ -327,8 +343,10 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
     i_count = len(itemss)
 
-    if TrueCycleCount > cycles:
+    if TrueCycleCount > 0 and TrueCycleCount > cycles:
         logger.warning(f"\n\n!!! Missing Cycle Data !!!   There are {TrueCycleCount - cycles} cycles unaccounted for.")
+    elif TrueCycleCount == 0:
+        logger.info(f"Processed {cycles} cycles (no cycle count specified)")
 
     # Upload to database
     def upload_to_cleans_collection():
