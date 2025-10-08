@@ -369,6 +369,10 @@ def run_pick_assistant():
             user = os.environ.get('USER')
             station = os.environ.get('STATION')
 
+            # If benchmark mode is active, always override station to "benchmark"
+            if benchmark_mode:
+                station = "benchmark"
+
             # Build the complete document
             clean_document = {
                 "podBarcode": before_space,
