@@ -332,13 +332,13 @@ def run_pick_assistant():
         print ("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount-cycles),"cycles unaccounted for.")
 
     #Copy output to clipboard if xclip is installed.
-    if not WindowsDebug:
-        from subprocess import Popen, PIPE
-        def copy2clip(text):
-            p = Popen(['xclip', '-selection','clipboard'],stdin=PIPE)
-            p.communicate(input=text.encode('utf-8'))
+    # if not WindowsDebug:
+    #     from subprocess import Popen, PIPE
+    #     def copy2clip(text):
+    #         p = Popen(['xclip', '-selection','clipboard'],stdin=PIPE)
+    #         p.communicate(input=text.encode('utf-8'))
 
-        copy2clip(output)
+    #     copy2clip(output)
 
     #Upload to database
     def upload_to_cleans_collection():
