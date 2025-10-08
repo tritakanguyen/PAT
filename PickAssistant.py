@@ -391,14 +391,14 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         try:
             from pymongo import MongoClient
 
-            logger.info("Connecting to MongoDB...")
+            logger.info("  Connecting to MongoDB...")
 
             # MongoDB connection string from environment variable for security
             # Set MONGODB_URI environment variable before running this script
             connection_string = os.environ.get('MONGODB_URI')
             if not connection_string:
                 logger.error("MONGODB_URI environment variable not set")
-                print("  Set it with: export MONGODB_URI='mongodb+srv://...'")
+                print("  Contact @ftnguyen to set it up")
                 return False
 
             # Connect to MongoDB
@@ -411,7 +411,7 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
             # Insert document into cleans collection
             result = cleans_collection.insert_one(clean_document)
 
-            logger.info(f"Pick list uploaded successfully")
+            logger.info(f"  Pick list uploaded successfully")
             logger.info(f"  Document ID: {result.inserted_id}")
             # Close connection
             client.close()
