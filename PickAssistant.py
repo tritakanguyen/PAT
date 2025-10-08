@@ -315,8 +315,8 @@ def upload_to_cleans_collection():
         # Prepare cleaning data document
         if podBarcode and " " in podBarcode and "-" in podBarcode:
             try:
-                # Split by space and get the part after space, then split by hyphen and get first part
                 after_space = podBarcode.split(" ")[1]
+                before_space = podBarcode.split(" ")[0]
                 podFace = after_space.split("-")[1]
                 podType = after_space.split("-")[0]
             except (IndexError, AttributeError):
@@ -326,10 +326,8 @@ def upload_to_cleans_collection():
         # Get system environment variables
         user = os.environ.get('USER')
         station = os.environ.get('STATION')
-
         clean_document = {
-            "_id": str(uuid.uuid4()),  # Generate unique ID
-            "podBarcode": podBarcode,
+            "podBarcode": before_space,
             "podName": PodName,
             "orchestratorId": orchestratorID,
             "podType": podType,
@@ -350,6 +348,7 @@ def upload_to_cleans_collection():
                 "binId": item_data[0],
                 "status": "stowed"
             })
+            print(f"Stowed: {item_data[1]} in {item_data[0]}")
 
         # Add attempted stows data
         for item_data in bitemss:
@@ -358,6 +357,7 @@ def upload_to_cleans_collection():
                 "binId": item_data[0],
                 "status": "attempted"
             })
+            print(f"Attempted: {item_data[1]} in {item_data[0]}")
 
         # Insert document into cleans collection
         result = cleans_collection.insert_one(clean_document)
@@ -383,4 +383,3 @@ def upload_to_cleans_collection():
 if __name__ == "__main__":
     # Call the upload function after all data processing is complete
     upload_success = upload_to_cleans_collection()
-
