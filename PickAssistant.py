@@ -11,6 +11,7 @@ Authors:
     - ftnguyen (Tri Nguyen)
 
 Version History:
+    v2.0: Major refactor for improved error handling, logging, and integration to webapp.
     v1.17: Use OLAF instead of human annotations.
     v1.15: Added pod barcode database to automatically look up the pod name.
     v1.14: Fixed bug in string construction caused by a file not being generated on Ubuntu 24
@@ -34,8 +35,6 @@ Usage:
 Environment Variables Required:
     MONGODB_URI: MongoDB connection string for database upload
 
-Security Note:
-    Never hardcode credentials. Always use environment variables for sensitive data.
 """
 
 import json
@@ -202,22 +201,30 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
     # Set Orchestrator ID
     if not WindowsDebug:
-        while orchestrator == "":
-            orchestrator = input("Enter the Orchestrator ID: ").strip()
-            podID = ""
-    if "/" in orchestrator:
-        parts = orchestrator.split("/")
-        for part in parts:
-            if "orchestrator_" in part:
-                orchestrator = part
-            elif "pod_" in part:
-                podID = part
-            elif "cycle_" in part:
-                try:
-                    TrueCycleCount = int(part.split("_")[1])
-                except (ValueError, IndexError) as e:
-                    logger.warning(f"Could not parse cycle count from '{part}': {e}")
-                    TrueCycleCount = 0
+        while True:
+            while orchestrator == "":
+                orchestrator = input("Enter the Orchestrator ID: ").strip()
+                podID = ""
+            if "/" in orchestrator:
+                parts = orchestrator.split("/")
+                for part in parts:
+                    if "orchestrator_" in part:
+                        orchestrator = part
+                    elif "pod_" in part:
+                        podID = part
+                    elif "cycle_" in part:
+                        try:
+                            TrueCycleCount = int(part.split("_")[1])
+                        except (ValueError, IndexError) as e:
+                            logger.warning(f"Could not parse cycle count from '{part}': {e}")
+                            TrueCycleCount = 0
+            # Check if orchestrator path exists
+            orchestrator_path = '/home/local/carbon/archive/' + orchestrator + '/'
+            if os.path.isdir(orchestrator_path):
+                break
+            else:
+                print(f"Orchestrator path '{orchestrator_path}' does not exist. Please enter a valid Orchestrator ID.")
+                orchestrator = ""
 
     # Set Pod ID / Check if Pod ID was not provided with the orchestrator. If not ask for the index with a default of 1.
     if podID == "":
