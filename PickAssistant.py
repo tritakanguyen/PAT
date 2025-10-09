@@ -42,6 +42,7 @@ import os
 import argparse
 import time
 import logging
+
 from typing import Dict, List, Optional, Tuple
 
 # Configure logging
@@ -439,9 +440,12 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
             print("  Document was prepared but upload failed")
             return False
 
-    # Call the upload function after all data processing is complete
-    upload_success = upload_to_cleans_collection()
-    return upload_success
+    while True:
+        upload_success = upload_to_cleans_collection()
+        if upload_success:
+            return True
+        input("\nPress Enter to retry or Ctrl+C to cancel...")
+        print("Retrying...")
 
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
@@ -475,4 +479,3 @@ if __name__ == "__main__":
     else:
         # Normal single execution
         run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
-
