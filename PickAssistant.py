@@ -52,7 +52,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print("PickAssistant v1.17")
+print("PickAssistant v2.0")
 
 # Configuration
 WindowsDebug = False  # Switch to False if you are on a workcell.
@@ -475,3 +475,4 @@ if __name__ == "__main__":
     else:
         # Normal single execution
         run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
+
