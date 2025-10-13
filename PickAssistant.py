@@ -257,16 +257,16 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         barcode_file = file_path + podID + "/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json"
 
     if not os.path.exists(barcode_file):
-        logger.error(f"Critical file not found: {barcode_file}")
-        print(f"\nERROR: Required file does not exist: {barcode_file}")
-        print("Workflow cannot continue. Exiting...")
+        logger.error(f"Critical file not found: {barcode_file}. Workflow cannot continue.")
+        if benchmark_mode:
+            return False
         exit(1)
 
     podBarcode = read_json_file(barcode_file)
     if podBarcode is None:
-        logger.error(f"Failed to read barcode file: {barcode_file}")
-        print(f"\nERROR: Could not read file: {barcode_file}")
-        print("Workflow cannot continue. Exiting...")
+        logger.error(f"Failed to read barcode file: {barcode_file}. Workflow cannot continue.")
+        if benchmark_mode:
+            return False
         exit(1)
 
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
@@ -286,16 +286,16 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         pod_data_file_path = file_path + podID + '/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
 
     if not os.path.exists(pod_data_file_path):
-        logger.error(f"Critical file not found: {pod_data_file_path}")
-        print(f"\nERROR: Required file does not exist: {pod_data_file_path}")
-        print("Workflow cannot continue. Exiting...")
+        logger.error(f"Critical file not found: {pod_data_file_path}. Workflow cannot continue.")
+        if benchmark_mode:
+            return False
         exit(1)
 
     PodData = read_json_file(pod_data_file_path)
     if PodData is None:
-        logger.error(f"Failed to read pod data file: {pod_data_file_path}")
-        print(f"\nERROR: Could not read file: {pod_data_file_path}")
-        print("Workflow cannot continue. Exiting...")
+        logger.error(f"Failed to read pod data file: {pod_data_file_path}. Workflow cannot continue.")
+        if benchmark_mode:
+            return False
         exit(1)
 
     # Loop through each cycle and gather data. | If missing data restart loop
@@ -321,18 +321,18 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                     stow_location_file_path = file_path + podID + '/cycle_' + str(i) + '/dynamic_1/match_output.data.json'
 
                 if not os.path.exists(stow_location_file_path):
-                    logger.error(f"Critical file not found: {stow_location_file_path}")
-                    print(f"\nERROR: Required file does not exist: {stow_location_file_path}")
-                    print("Workflow cannot continue. Exiting...")
+                    logger.error(f"Critical file not found: {stow_location_file_path}. Workflow cannot continue.")
+                    if benchmark_mode:
+                        return False
                     exit(1)
 
                 AnnotationData = read_json_file(annotation_file_path)
                 StowData = read_json_file(stow_location_file_path)
 
                 if StowData is None:
-                    logger.error(f"Failed to read stow data file: {stow_location_file_path}")
-                    print(f"\nERROR: Could not read file: {stow_location_file_path}")
-                    print("Workflow cannot continue. Exiting...")
+                    logger.error(f"Failed to read stow data file: {stow_location_file_path}. Workflow cannot continue.")
+                    if benchmark_mode:
+                        return False
                     exit(1)
 
                 # If data exists add it to the nested dictionary.
