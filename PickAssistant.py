@@ -9,6 +9,7 @@ Authors:
     - djoneben (Ben Jones)
     - grsjoshu (Joshua Green)
     - ftnguyen (Tri Nguyen)
+    - mathar (Matt Harrison)
 
 Version History:
     v2.0: Major refactor for improved error handling, logging, and integration to webapp.
@@ -250,10 +251,23 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     # Get the Pod Barcode from generated files. If the files do not exist then the program will print a crash report to terminal.
     if WindowsDebug:
         file_path = '' + orchestrator + ''
-        podBarcode = read_json_file("pod_1\\cycle_1\\dynamic_1\\datamanager_triggers_load_data.data.json")
+        barcode_file = "pod_1\\cycle_1\\dynamic_1\\datamanager_triggers_load_data.data.json"
     else:
         file_path = '/home/local/carbon/archive/' + orchestrator + '/'
-        podBarcode = read_json_file(file_path + podID + "/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json")
+        barcode_file = file_path + podID + "/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json"
+
+    if not os.path.exists(barcode_file):
+        logger.error(f"Critical file not found: {barcode_file}")
+        print(f"\nERROR: Required file does not exist: {barcode_file}")
+        print("Workflow cannot continue. Exiting...")
+        exit(1)
+
+    podBarcode = read_json_file(barcode_file)
+    if podBarcode is None:
+        logger.error(f"Failed to read barcode file: {barcode_file}")
+        print(f"\nERROR: Could not read file: {barcode_file}")
+        print("Workflow cannot continue. Exiting...")
+        exit(1)
 
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
     if podBarcode in POD_BARCODE_DATABASE:
@@ -270,7 +284,19 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     else:
         temp = "/cycle_"
         pod_data_file_path = file_path + podID + '/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
+
+    if not os.path.exists(pod_data_file_path):
+        logger.error(f"Critical file not found: {pod_data_file_path}")
+        print(f"\nERROR: Required file does not exist: {pod_data_file_path}")
+        print("Workflow cannot continue. Exiting...")
+        exit(1)
+
     PodData = read_json_file(pod_data_file_path)
+    if PodData is None:
+        logger.error(f"Failed to read pod data file: {pod_data_file_path}")
+        print(f"\nERROR: Could not read file: {pod_data_file_path}")
+        print("Workflow cannot continue. Exiting...")
+        exit(1)
 
     # Loop through each cycle and gather data. | If missing data restart loop
     global current_state
@@ -293,8 +319,21 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                 else:
                     annotation_file_path = file_path + podID + '/cycle_' + str(i) + '/auto_annotation/_olaf_primary_annotation.data.json'
                     stow_location_file_path = file_path + podID + '/cycle_' + str(i) + '/dynamic_1/match_output.data.json'
+
+                if not os.path.exists(stow_location_file_path):
+                    logger.error(f"Critical file not found: {stow_location_file_path}")
+                    print(f"\nERROR: Required file does not exist: {stow_location_file_path}")
+                    print("Workflow cannot continue. Exiting...")
+                    exit(1)
+
                 AnnotationData = read_json_file(annotation_file_path)
                 StowData = read_json_file(stow_location_file_path)
+
+                if StowData is None:
+                    logger.error(f"Failed to read stow data file: {stow_location_file_path}")
+                    print(f"\nERROR: Could not read file: {stow_location_file_path}")
+                    print("Workflow cannot continue. Exiting...")
+                    exit(1)
 
                 # If data exists add it to the nested dictionary.
                 if StowData:
@@ -333,7 +372,7 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     if not read_success:
         logger.error("Cannot proceed to GENERATING_CONTENT: READ_COMPLETE not achieved")
         raise RuntimeError("State transition blocked: reading files did not complete successfully")
-    
+
     current_state = WorkflowState.GENERATING_CONTENT
     logger.info(f"State: {current_state.value}")
 
@@ -371,7 +410,7 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         if not generation_success:
             logger.error("Cannot proceed to UPLOADING_DATABASE: GENERATION_COMPLETE not achieved")
             return False
-        
+
         current_state = WorkflowState.UPLOADING_DATABASE
         logger.info(f"State: {current_state.value}")
 
