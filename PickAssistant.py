@@ -42,6 +42,7 @@ import os
 import argparse
 import time
 import logging
+from enum import Enum
 
 from typing import Dict, List, Optional, Tuple
 
@@ -57,6 +58,20 @@ print("PickAssistant v2.0")
 
 # Configuration
 WindowsDebug = False  # Switch to False if you are on a workcell.
+
+# Workflow State Management
+class WorkflowState(Enum):
+    READING_FILES = "reading_files"
+    READ_COMPLETE = "read_complete"
+    READ_FAILED = "read_failed"
+    GENERATING_CONTENT = "generating_content"
+    GENERATION_COMPLETE = "generation_complete"
+    GENERATION_FAILED = "generation_failed"
+    UPLOADING_DATABASE = "uploading_database"
+    UPLOAD_COMPLETE = "upload_complete"
+    UPLOAD_FAILED = "upload_failed"
+
+current_state = WorkflowState.READING_FILES
 
 # Pod Barcode Database - Maps pod barcodes to friendly names
 POD_BARCODE_DATABASE = {
@@ -182,19 +197,7 @@ args = parser.parse_args()
 
 # Wrap the main logic in a loop if benchmark mode is enabled
 def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_arg, benchmark_mode=False):
-    """
-    Main function to process pod stow data and upload to database.
 
-    Args:
-        orchestrator_arg: Orchestrator ID string
-        pod_id_arg: Pod ID string
-        pod_name_arg: Pod name/identifier
-        cycle_count_arg: Total number of cycles to process
-        benchmark_mode: Whether running in benchmark mode
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
     orchestrator = orchestrator_arg
     podID = pod_id_arg
     PodName = pod_name_arg
@@ -267,6 +270,10 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     PodData = read_json_file(pod_data_file_path)
 
     # Loop through each cycle and gather data. | If missing data restart loop
+    global current_state
+    current_state = WorkflowState.READING_FILES
+    logger.info(f"State: {current_state.value}")
+
     isDone = False
     while not isDone:
         i = 1
@@ -275,54 +282,72 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
         cycles = 0
 
-        while os.path.isdir(file_path + podID + temp + str(i)):
-            if WindowsDebug:
-                annotation_file_path = file_path + podID + '\\cycle_' + str(i) + '\\auto_annotation\\_olaf_primary_annotation.data.json'
-                stow_location_file_path = file_path + podID + '\\cycle_' + str(i) + '\\dynamic_1\\match_output.data.json'
-            else:
-                annotation_file_path = file_path + podID + '/cycle_' + str(i) + '/auto_annotation/_olaf_primary_annotation.data.json'
-                stow_location_file_path = file_path + podID + '/cycle_' + str(i) + '/dynamic_1/match_output.data.json'
-            AnnotationData = read_json_file(annotation_file_path)
-            StowData = read_json_file(stow_location_file_path)
-
-            # If data exists add it to the nested dictionary.
-            if StowData:
-                cycles += 1
-                if StowData.get("binId"):
-                    if AnnotationData and AnnotationData.get("isStowedItemInBin"):
-                        StowedItems['/cycle_' + str(i)] = {
-                            "itemFcsku": StowData.get("itemFcsku"),
-                            "binId": StowData.get("binId"),
-                            "binScannableId": StowData.get("binScannableId")
-                        }
-                    else:
-                        AttemptedStows['/cycle_' + str(i)] = {
-                            "itemFcsku": StowData.get("itemFcsku"),
-                            "binId": StowData.get("binId"),
-                            "binScannableId": StowData.get("binScannableId")
-                        }
+        try:
+            while os.path.isdir(file_path + podID + temp + str(i)):
+                if WindowsDebug:
+                    annotation_file_path = file_path + podID + '\\cycle_' + str(i) + '\\auto_annotation\\_olaf_primary_annotation.data.json'
+                    stow_location_file_path = file_path + podID + '\\cycle_' + str(i) + '\\dynamic_1\\match_output.data.json'
                 else:
-                    print("cycle_" + str(i) + " does not have a bin ID.")
-            i += 1
-        if cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
-            isDone = True
-        else:
-            print("Cycles missing (", cycles, "/", TrueCycleCount, "), retrying...")
-            time.sleep(1)
+                    annotation_file_path = file_path + podID + '/cycle_' + str(i) + '/auto_annotation/_olaf_primary_annotation.data.json'
+                    stow_location_file_path = file_path + podID + '/cycle_' + str(i) + '/dynamic_1/match_output.data.json'
+                AnnotationData = read_json_file(annotation_file_path)
+                StowData = read_json_file(stow_location_file_path)
+
+                # If data exists add it to the nested dictionary.
+                if StowData:
+                    cycles += 1
+                    if StowData.get("binId"):
+                        if AnnotationData and AnnotationData.get("isStowedItemInBin"):
+                            StowedItems['/cycle_' + str(i)] = {
+                                "itemFcsku": StowData.get("itemFcsku"),
+                                "binId": StowData.get("binId"),
+                                "binScannableId": StowData.get("binScannableId")
+                            }
+                        else:
+                            AttemptedStows['/cycle_' + str(i)] = {
+                                "itemFcsku": StowData.get("itemFcsku"),
+                                "binId": StowData.get("binId"),
+                                "binScannableId": StowData.get("binScannableId")
+                            }
+                    else:
+                        print("cycle_" + str(i) + " does not have a bin ID.")
+                i += 1
+            if cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
+                isDone = True
+                current_state = WorkflowState.READ_COMPLETE
+                logger.info(f"State: {current_state.value}")
+            else:
+                print("Cycles missing (", cycles, "/", TrueCycleCount, "), retrying...")
+                time.sleep(1)
+        except Exception as e:
+            current_state = WorkflowState.READ_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
+            raise
 
     # Adds / reorders the list of items into bin location by alphabetic order first then numerical.
-    itemss = []
-    for item in StowedItems:
-        itemss.append([StowedItems[item]["binId"], StowedItems[item]["itemFcsku"]])
-    itemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+    current_state = WorkflowState.GENERATING_CONTENT
+    logger.info(f"State: {current_state.value}")
 
-    # Adds / reorders the list of likely failed stows.
-    bitemss = []
-    for item in AttemptedStows:
-        bitemss.append([AttemptedStows[item]["binId"], AttemptedStows[item]["itemFcsku"]])
-    bitemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+    try:
+        itemss = []
+        for item in StowedItems:
+            itemss.append([StowedItems[item]["binId"], StowedItems[item]["itemFcsku"]])
+        itemss.sort(key=lambda x: x[0][-1] + x[0][-2])
 
-    i_count = len(itemss)
+        # Adds / reorders the list of likely failed stows.
+        bitemss = []
+        for item in AttemptedStows:
+            bitemss.append([AttemptedStows[item]["binId"], AttemptedStows[item]["itemFcsku"]])
+        bitemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+
+        i_count = len(itemss)
+
+        current_state = WorkflowState.GENERATION_COMPLETE
+        logger.info(f"State: {current_state.value}")
+    except Exception as e:
+        current_state = WorkflowState.GENERATION_FAILED
+        logger.error(f"State: {current_state.value} - {e}")
+        raise
 
     if TrueCycleCount > cycles:
         print("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount - cycles), "cycles unaccounted for.")
@@ -330,6 +355,10 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     # Upload to database
     def upload_to_cleans_collection():
         from datetime import datetime
+        global current_state
+
+        current_state = WorkflowState.UPLOADING_DATABASE
+        logger.info(f"State: {current_state.value}")
 
         # Prepare cleaning data document FIRST (before any DB connection)
         try:
@@ -429,14 +458,19 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
             if benchmark_mode:
                 if podFace == "A":
                     logger.info(f"  Awaiting {PodName} C face")
+
+            current_state = WorkflowState.UPLOAD_COMPLETE
+            logger.info(f"State: {current_state.value}")
             return True
 
         except ImportError:
-            logger.error("PyMongo not installed. Install with: pip install pymongo")
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - PyMongo not installed")
             print("  Document was prepared but not uploaded")
             return False
         except Exception as e:
-            logger.error(f"Error uploading to MongoDB cleans collection: {e}")
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
             print("  Document was prepared but upload failed")
             return False
 
@@ -468,13 +502,7 @@ if __name__ == "__main__":
                 print(f"{'='*60}\n")
 
                 run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
-
-                print(f"\n--- Benchmark run #{run_count} completed ---")
-                print("Waiting 2 seconds before next run...")
-                time.sleep(2)
         except KeyboardInterrupt:
-            print(f"\n\n*** Benchmark mode cancelled by user ***")
-            print(f"Total runs completed: {run_count}")
             print("Exiting...")
     else:
         # Normal single execution
