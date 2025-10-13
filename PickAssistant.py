@@ -72,6 +72,9 @@ class WorkflowState(Enum):
     UPLOAD_FAILED = "upload_failed"
 
 current_state = WorkflowState.READING_FILES
+read_success = False
+generation_success = False
+upload_success = False
 
 # Pod Barcode Database - Maps pod barcodes to friendly names
 POD_BARCODE_DATABASE = {
@@ -314,17 +317,23 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                 i += 1
             if cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
                 isDone = True
+                read_success = True
                 current_state = WorkflowState.READ_COMPLETE
                 logger.info(f"State: {current_state.value}")
             else:
                 print("Cycles missing (", cycles, "/", TrueCycleCount, "), retrying...")
                 time.sleep(1)
         except Exception as e:
+            read_success = False
             current_state = WorkflowState.READ_FAILED
             logger.error(f"State: {current_state.value} - {e}")
             raise
 
     # Adds / reorders the list of items into bin location by alphabetic order first then numerical.
+    if not read_success:
+        logger.error("Cannot proceed to GENERATING_CONTENT: READ_COMPLETE not achieved")
+        raise RuntimeError("State transition blocked: reading files did not complete successfully")
+    
     current_state = WorkflowState.GENERATING_CONTENT
     logger.info(f"State: {current_state.value}")
 
@@ -342,9 +351,11 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
         i_count = len(itemss)
 
+        generation_success = True
         current_state = WorkflowState.GENERATION_COMPLETE
         logger.info(f"State: {current_state.value}")
     except Exception as e:
+        generation_success = False
         current_state = WorkflowState.GENERATION_FAILED
         logger.error(f"State: {current_state.value} - {e}")
         raise
@@ -355,8 +366,12 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     # Upload to database
     def upload_to_cleans_collection():
         from datetime import datetime
-        global current_state
+        global current_state, upload_success
 
+        if not generation_success:
+            logger.error("Cannot proceed to UPLOADING_DATABASE: GENERATION_COMPLETE not achieved")
+            return False
+        
         current_state = WorkflowState.UPLOADING_DATABASE
         logger.info(f"State: {current_state.value}")
 
@@ -421,6 +436,7 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                     "status": "attempted"
                 })
         except Exception as e:
+            upload_success = False
             logger.error(f"Error preparing document: {e}")
             return False
 
@@ -434,6 +450,7 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
             # Set MONGODB_URI environment variable before running this script
             connection_string = os.environ.get('MONGODB_URI')
             if not connection_string:
+                upload_success = False
                 logger.error("MONGODB_URI environment variable not set")
                 print("  Contact @ftnguyen to set it up")
                 return False
@@ -459,24 +476,27 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                 if podFace == "A":
                     logger.info(f"  Awaiting {PodName} C face")
 
+            upload_success = True
             current_state = WorkflowState.UPLOAD_COMPLETE
             logger.info(f"State: {current_state.value}")
             return True
 
         except ImportError:
+            upload_success = False
             current_state = WorkflowState.UPLOAD_FAILED
             logger.error(f"State: {current_state.value} - PyMongo not installed")
             print("  Document was prepared but not uploaded")
             return False
         except Exception as e:
+            upload_success = False
             current_state = WorkflowState.UPLOAD_FAILED
             logger.error(f"State: {current_state.value} - {e}")
             print("  Document was prepared but upload failed")
             return False
 
     while True:
-        upload_success = upload_to_cleans_collection()
-        if upload_success:
+        result = upload_to_cleans_collection()
+        if result:
             return True
         input("\nPress Enter to retry or Ctrl+C to cancel...")
         print("Retrying...")
