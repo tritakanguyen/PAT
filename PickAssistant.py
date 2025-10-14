@@ -270,45 +270,45 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         exit(1)
 
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
-    if podBarcode in POD_BARCODE_DATABASE:
-        PodName = POD_BARCODE_DATABASE[podBarcode]
-    if PodName == "":
-        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
-    else:
-        print(PodName, " was found via the barcode")
+    # if podBarcode in POD_BARCODE_DATABASE:
+    #     PodName = POD_BARCODE_DATABASE[podBarcode]
+    # if PodName == "":
+    #     PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
+    # else:
+    #     print(PodName, " was found via the barcode")
 
-    # Get Pod barcode/ID
-    if WindowsDebug:
-        temp = "\\cycle_"
-        pod_data_file_path = file_path + podID + '\\cycle_1\\dynamic_1\\workcell_metric_latest_pod_visit.data.json'
-    else:
-        temp = "/cycle_"
-        pod_data_file_path = file_path + podID + '/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
+    # # Get Pod barcode/ID
+    # if WindowsDebug:
+    #     temp = "\\cycle_"
+    #     pod_data_file_path = file_path + podID + '\\cycle_1\\dynamic_1\\workcell_metric_latest_pod_visit.data.json'
+    # else:
+    #     temp = "/cycle_"
+    #     pod_data_file_path = file_path + podID + '/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
 
-    if not os.path.exists(pod_data_file_path):
-        logger.error(f"Critical file not found: {pod_data_file_path}. Workflow cannot continue.")
-        if benchmark_mode:
-            return False
-        exit(1)
+    # if not os.path.exists(pod_data_file_path):
+    #     logger.error(f"Critical file not found: {pod_data_file_path}. Workflow cannot continue.")
+    #     if benchmark_mode:
+    #         return False
+    #     exit(1)
 
-    PodData = read_json_file(pod_data_file_path)
-    if PodData is None:
-        logger.error(f"Failed to read pod data file: {pod_data_file_path}. Workflow cannot continue.")
-        if benchmark_mode:
-            return False
-        exit(1)
+    # PodData = read_json_file(pod_data_file_path)
+    # if PodData is None:
+    #     logger.error(f"Failed to read pod data file: {pod_data_file_path}. Workflow cannot continue.")
+    #     if benchmark_mode:
+    #         return False
+    #     exit(1)
 
-    # Loop through each cycle and gather data. | If missing data restart loop
-    global current_state
-    current_state = WorkflowState.READING_FILES
-    logger.info(f"State: {current_state.value}")
+    # # Loop through each cycle and gather data. | If missing data restart loop
+    # global current_state
+    # current_state = WorkflowState.READING_FILES
+    # logger.info(f"State: {current_state.value}")
 
     isDone = False
     while not isDone:
         i = 1
         StowedItems = {}
         AttemptedStows = {}
-
+        temp = "/cycle_"
         cycles = 0
 
         try:
