@@ -42,6 +42,7 @@ import json
 import os
 import argparse
 import time
+import requests
 import logging
 from enum import Enum
 
@@ -76,6 +77,7 @@ current_state = WorkflowState.READING_FILES
 read_success = False
 generation_success = False
 upload_success = False
+backend_url = "https://pms-backend-3q99.onrender.com/health"
 
 # Pod Barcode Database - Maps pod barcodes to friendly names
 POD_BARCODE_DATABASE = {
@@ -562,7 +564,10 @@ if __name__ == "__main__":
 
                 run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
         except KeyboardInterrupt:
+            response = requests.get(backend_url, timeout=3)
             print("Exiting...")
     else:
         # Normal single execution
         run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
+        response = requests.get(backend_url, timeout=3)
+
