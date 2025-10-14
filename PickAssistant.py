@@ -367,11 +367,11 @@ def upload_to_cleans_collection():
 
         #print(f"\n✓ Successfully uploaded cleaning data to MongoDB 'cleans' collection")
         #print(f"  Document ID: {result.inserted_id}")
-        print("f  PickAssistant v2.0 deploy on Oct 22nd")
-        print("f  Pod: {PodName} ({podBarcode}) has uploaded to PMS")
+        print(f"  PickAssistant v2.0 deploy on Oct 22nd")
+        print(f"  Pod: {PodName} ({podBarcode}) has uploaded to PMS")
         #print(f"  Items processed: {i_count}/{cycles}")
         print(f"  Access result at url below")
-        print(f" https://pms-xyhg.onrender.com/")
+        print(f"  https://pms-xyhg.onrender.com/")
 
         # Close connection
         client.close()
@@ -389,6 +389,7 @@ def upload_to_cleans_collection():
 if __name__ == "__main__":
     # Call the upload function after all data processing is complete
     upload_success = upload_to_cleans_collection()
+
 
 
 
