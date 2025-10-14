@@ -30,7 +30,8 @@ import os
 import argparse
 import time
 
-print ("PickAssistant v1.17")
+print ("Stage 1 release deployed")
+print ("PickAssistant v1.18")
 
 WindowsDebug = False # switch to False if you are on a workcell.
 
@@ -175,13 +176,13 @@ else:
     print (PodName," was found via the barcode")
 
 #Get Pod barcode/ID
-if WindowsDebug:
-    temp="\\cycle_"
-    pod_data_file_path = file_path+podID+'\\cycle_1\\dynamic_1\\workcell_metric_latest_pod_visit.data.json'
-else:
-    temp="/cycle_"
-    pod_data_file_path = file_path+podID+'/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
-PodData = read_json_file(pod_data_file_path)
+# if WindowsDebug:
+#     temp="\\cycle_"
+#     pod_data_file_path = file_path+podID+'\\cycle_1\\dynamic_1\\workcell_metric_latest_pod_visit.data.json'
+# else:
+#     temp="/cycle_"
+#     pod_data_file_path = file_path+podID+'/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
+# PodData = read_json_file(pod_data_file_path)
 
 #Loop through each cycle and gather data. | If missing data restart loop
 isDone = False
@@ -189,7 +190,7 @@ while not isDone:
     i=1
     StowedItems={}
     AttemptedStows={}
-
+    temp="/cycle_"
     cycles = 0
 
     while os.path.isdir(file_path+podID+temp+str(i)):
@@ -293,7 +294,9 @@ if not WindowsDebug:
         p = Popen(['xclip', '-selection','clipboard'],stdin=PIPE)
         p.communicate(input=text.encode('utf-8'))
 
-    copy2clip(output)
+    #copy2clip(output)
+print ("Release testing completed")
+print ("Copy to clipboard has been deactivated")
 
 #Upload to database
 def upload_to_cleans_collection():
@@ -362,10 +365,13 @@ def upload_to_cleans_collection():
         # Insert document into cleans collection
         result = cleans_collection.insert_one(clean_document)
 
-        print(f"\n✓ Successfully uploaded cleaning data to MongoDB 'cleans' collection")
-        print(f"  Document ID: {result.inserted_id}")
-        print(f"  Pod: {PodName} ({podBarcode})")
-        print(f"  Items processed: {i_count}/{cycles}")
+        #print(f"\n✓ Successfully uploaded cleaning data to MongoDB 'cleans' collection")
+        #print(f"  Document ID: {result.inserted_id}")
+        print("f  PickAssistant v2.0 deploy on Oct 22nd")
+        print(f"  Pod: {PodName} ({podBarcode}) has uploaded to PMS")
+        #print(f"  Items processed: {i_count}/{cycles}")
+        print(f"  Access result at url below")
+        print(f" https://pms-xyhg.onrender.com/")
 
         # Close connection
         client.close()
@@ -383,4 +389,5 @@ def upload_to_cleans_collection():
 if __name__ == "__main__":
     # Call the upload function after all data processing is complete
     upload_success = upload_to_cleans_collection()
+
 
