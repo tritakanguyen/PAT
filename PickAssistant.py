@@ -270,12 +270,12 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         exit(1)
 
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
-    # if podBarcode in POD_BARCODE_DATABASE:
-    #     PodName = POD_BARCODE_DATABASE[podBarcode]
-    # if PodName == "":
-    #     PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
-    # else:
-    #     print(PodName, " was found via the barcode")
+    if podBarcode in POD_BARCODE_DATABASE:
+        PodName = POD_BARCODE_DATABASE[podBarcode]
+    if PodName == "":
+        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
+    else:
+        print(PodName, " was found via the barcode")
 
     # # Get Pod barcode/ID
     # if WindowsDebug:
