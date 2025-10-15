@@ -42,8 +42,8 @@ import json
 import os
 import argparse
 import time
-#import requests
 import logging
+import uuid
 from enum import Enum
 
 from typing import Dict, List, Optional, Tuple
@@ -77,7 +77,6 @@ current_state = WorkflowState.READING_FILES
 read_success = False
 generation_success = False
 upload_success = False
-#backend_url = "https://pms-backend-3q99.onrender.com/health"
 
 # Pod Barcode Database - Maps pod barcodes to friendly names
 POD_BARCODE_DATABASE = {
@@ -279,32 +278,6 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     else:
         print(PodName, " was found via the barcode")
 
-    # # Get Pod barcode/ID
-    # if WindowsDebug:
-    #     temp = "\\cycle_"
-    #     pod_data_file_path = file_path + podID + '\\cycle_1\\dynamic_1\\workcell_metric_latest_pod_visit.data.json'
-    # else:
-    #     temp = "/cycle_"
-    #     pod_data_file_path = file_path + podID + '/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
-
-    # if not os.path.exists(pod_data_file_path):
-    #     logger.error(f"Critical file not found: {pod_data_file_path}. Workflow cannot continue.")
-    #     if benchmark_mode:
-    #         return False
-    #     exit(1)
-
-    # PodData = read_json_file(pod_data_file_path)
-    # if PodData is None:
-    #     logger.error(f"Failed to read pod data file: {pod_data_file_path}. Workflow cannot continue.")
-    #     if benchmark_mode:
-    #         return False
-    #     exit(1)
-
-    # # Loop through each cycle and gather data. | If missing data restart loop
-    # global current_state
-    # current_state = WorkflowState.READING_FILES
-    # logger.info(f"State: {current_state.value}")
-
     isDone = False
     while not isDone:
         i = 1
@@ -447,6 +420,7 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
             # Build the complete document
             clean_document = {
+                "_id": str(uuid.uuid4()),
                 "podBarcode": before_space,
                 "podName": PodName,
                 "orchestratorId": orchestratorID,
@@ -564,11 +538,7 @@ if __name__ == "__main__":
 
                 run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
         except KeyboardInterrupt:
-            #response = requests.get(backend_url, timeout=3)
             print("Exiting...")
     else:
         # Normal single execution
         run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
-        #response = requests.get(backend_url, timeout=3)
-
-
