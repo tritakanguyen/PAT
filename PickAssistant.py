@@ -299,20 +299,8 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                     annotation_file_path = file_path + podID + '/cycle_' + str(i) + '/auto_annotation/_olaf_primary_annotation.data.json'
                     stow_location_file_path = file_path + podID + '/cycle_' + str(i) + '/dynamic_1/match_output.data.json'
 
-                #if not os.path.exists(stow_location_file_path):
-                    #logger.error(f"Critical file not found: {stow_location_file_path}. Workflow cannot continue.")
-                    #if benchmark_mode:
-                        #return False
-                    #exit(1)
-
                 AnnotationData = read_json_file(annotation_file_path)
                 StowData = read_json_file(stow_location_file_path)
-
-                #if StowData is None:
-                    #logger.error(f"Failed to read stow data file: {stow_location_file_path}. Workflow cannot continue.")
-                    #if benchmark_mode:
-                        #return False
-                    #exit(1)
 
                 # If data exists add it to the nested dictionary.
                 if StowData:
@@ -465,7 +453,6 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
 
             logger.info("  Connecting to MongoDB...")
 
-            # MongoDB connection string from environment variable for security
             # Set MONGODB_URI environment variable before running this script
             connection_string = os.environ.get('MONGODB_URI')
             if not connection_string:
