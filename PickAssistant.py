@@ -214,6 +214,8 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
             while orchestrator == "":
                 orchestrator = input("Enter the Orchestrator ID: ").strip()
                 podID = ""
+                if orchestrator == 'exit' or orchestrator == "":
+                    exit_funct()
             if "/" in orchestrator:
                 parts = orchestrator.split("/")
                 for part in parts:
@@ -246,9 +248,11 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
     # Inquire about total cycles to prevent data loss.
     if TrueCycleCount == 0:
         inputt = input("Please enter the total cycle count: ")
+        TrueCycleCount = ''
         if inputt.isdigit():
             TrueCycleCount = int(inputt)
-
+        else:
+            TrueCycleCount = 0
     # Get the Pod Barcode from generated files. If the files do not exist then the program will print a crash report to terminal.
     if WindowsDebug:
         file_path = '' + orchestrator + ''
@@ -295,20 +299,20 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                     annotation_file_path = file_path + podID + '/cycle_' + str(i) + '/auto_annotation/_olaf_primary_annotation.data.json'
                     stow_location_file_path = file_path + podID + '/cycle_' + str(i) + '/dynamic_1/match_output.data.json'
 
-                if not os.path.exists(stow_location_file_path):
-                    logger.error(f"Critical file not found: {stow_location_file_path}. Workflow cannot continue.")
-                    if benchmark_mode:
-                        return False
-                    exit(1)
+                #if not os.path.exists(stow_location_file_path):
+                    #logger.error(f"Critical file not found: {stow_location_file_path}. Workflow cannot continue.")
+                    #if benchmark_mode:
+                        #return False
+                    #exit(1)
 
                 AnnotationData = read_json_file(annotation_file_path)
                 StowData = read_json_file(stow_location_file_path)
 
-                if StowData is None:
-                    logger.error(f"Failed to read stow data file: {stow_location_file_path}. Workflow cannot continue.")
-                    if benchmark_mode:
-                        return False
-                    exit(1)
+                #if StowData is None:
+                    #logger.error(f"Failed to read stow data file: {stow_location_file_path}. Workflow cannot continue.")
+                    #if benchmark_mode:
+                        #return False
+                    #exit(1)
 
                 # If data exists add it to the nested dictionary.
                 if StowData:
@@ -516,6 +520,9 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         input("\nPress Enter to retry or Ctrl+C to cancel...")
         print("Retrying...")
 
+def exit_funct():
+    logger.info('Exiting...')
+    exit(1)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
     # Parse command line arguments
@@ -538,7 +545,7 @@ if __name__ == "__main__":
 
                 run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
         except KeyboardInterrupt:
-            print("Exiting...")
+            exit_funct()
     else:
         # Normal single execution
         run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
