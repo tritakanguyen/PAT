@@ -155,7 +155,7 @@ def get_json(s3_uri: str) -> Optional[Dict]:
         return data
     except Exception as e:
         if 'NoSuchKey' in str(e):
-            logger.error(f"S3 file '{s3_uri}' not found.")
+            logger.info(f"S3 file '{s3_uri}' not found.")
         elif 'JSONDecodeError' in str(type(e).__name__):
             logger.error(f"Invalid JSON format in S3 file '{s3_uri}'.")
         else:
@@ -255,10 +255,11 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
                     break
                 print(f"Invalid station. Please choose from: {', '.join(STATION_LIST)}")
 
-        # Set date - use today if not provided
+        # Prompt for date if not provided
         if not custom_date:
-            custom_date = datetime.now().strftime("%Y-%m-%d")
-        #print(f"Using date: {custom_date}")
+            date_input = input("Enter date (YYYY-MM-DD) or press Enter for today: ").strip()
+            custom_date = date_input if date_input else datetime.now().strftime("%Y-%m-%d")
+        print(f"Using date: {custom_date}")
 
         # Prompt for pod ID if not parsed
         if podID == "":
@@ -313,7 +314,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
     if PodName == "":
         PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
     else:
-        print(PodName, " was found via the barcode")
+        logger.info(f"{PodName} was found via the barcode")
 
     isDone = False
     while not isDone:
@@ -351,7 +352,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
                                 "binScannableId": StowData.get("binScannableId")
                             }
                     else:
-                        print("cycle_" + str(i) + " does not have a bin ID.")
+                        logger.info(f"cycle_" + str(i) + " does not have a bin ID.")
                 i += 1
             
             if cycles >= TrueCycleCount:
@@ -360,7 +361,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
                 current_state = WorkflowState.READ_COMPLETE
                 logger.info(f"State: {current_state.value}")
             else:
-                print("Cycles missing (", cycles, "/", TrueCycleCount, "), retrying...")
+                logger.info(f"Cycles missing ({cycles}/{TrueCycleCount}), retrying...")
                 time.sleep(1)
         except Exception as e:
             read_success = False
@@ -571,7 +572,15 @@ if __name__ == "__main__":
                 print(f"Benchmark Run #{run_count}")
                 print(f"{'='*60}\n")
 
-                run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+                result = run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+                if not result:
+                    break
+                
+                # Reset for next iteration to prompt for new inputs
+                orchestrator = args.orchestrator
+                PodName = args.podname
+                custom_date = args.date
+                stationId = args.station
         except KeyboardInterrupt:
             exit_funct()
     else:
