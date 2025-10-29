@@ -43,7 +43,11 @@ import os
 import argparse
 import time
 import logging
+import tempfile
+from urllib.parse import urlparse
 import uuid
+import boto3
+import subprocess
 from enum import Enum
 
 from typing import Dict, List, Optional, Tuple
@@ -57,9 +61,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 print("PickAssistant v2.0")
-
-# Configuration
-WindowsDebug = False  # Switch to False if you are on a workcell.
 
 # Workflow State Management
 class WorkflowState(Enum):
@@ -128,26 +129,37 @@ POD_BARCODE_DATABASE = {
     "HB05100404685 H10-C" : "Pod Father"
 }
 
-def read_json_file(file_path: str) -> Optional[Dict]:
+s3_uri_main = "s3://stow-carbon-copy/Atlas/${stationId}/${date}/${orchestrator}/${PodID}/cycle_${CycleID}/dynamic_1/"
+podID_uri = s3_uri_main + "datamanager_triggers_load_data.data.json"
+match_output_uri = s3_uri_main + "match_output.data.json"
+
+def get_json(s3_uri: str) -> Optional[Dict]:
     """
-    Read and parse a JSON file.
+    Read and parse a JSON file from S3.
 
     Args:
-        file_path: Path to the JSON file
+        s3_uri: S3 URI (e.g., s3://bucket/path/to/file.json)
 
     Returns:
         Parsed JSON data as dictionary, or None if error occurs
     """
     try:
-        with open(file_path, 'r') as file:
-            data = json.load(file)
+        s3 = boto3.client('s3')
+        parsed = urlparse(s3_uri)
+        bucket = parsed.netloc
+        key = parsed.path.lstrip('/')
+        
+        response = s3.get_object(Bucket=bucket, Key=key)
+        json_content = response['Body'].read().decode('utf-8')
+        data = json.loads(json_content)
         return data
-    except FileNotFoundError:
-        logger.error(f"File '{file_path}' not found.")
-    except json.JSONDecodeError:
-        logger.error(f"Invalid JSON format in file '{file_path}'.")
     except Exception as e:
-        logger.error(f"An error occurred while reading the JSON file: {e}")
+        if 'NoSuchKey' in str(e):
+            logger.error(f"S3 file '{s3_uri}' not found.")
+        elif 'JSONDecodeError' in str(type(e).__name__):
+            logger.error(f"Invalid JSON format in S3 file '{s3_uri}'.")
+        else:
+            logger.error(f"Error reading S3 file: {e}")
     return None
 
 
@@ -178,101 +190,122 @@ parser.add_argument('-o', '--orchestrator',
                     metavar='ID',
                     help='Orchestrator ID (can include pod and cycle info, e.g., orchestrator_123/pod_1/cycle_50)')
 
-parser.add_argument('-p', '--podid',
-                    default='',
-                    metavar='POD',
-                    help='Pod ID (e.g., pod_1, pod_2). If not provided, will be prompted.')
-
 parser.add_argument('-n', '--podname',
                     default='',
                     metavar='NAME',
                     help='Pod name/identifier (e.g., "Ninja Turtle", "South Park"). Auto-detected from barcode if available.')
 
-parser.add_argument('-c', '--cycle',
-                    default=0,
-                    type=int,
-                    metavar='CYCLE',
-                    help='Total number of cycles to process. If not provided, will be prompted.')
-
 parser.add_argument('-bm', '--benchmark',
                     action='store_true',
                     help='Run in benchmark mode (loops continuously until Ctrl+C is pressed)')
 
+parser.add_argument('-d', '--date',
+                    default='',
+                    metavar='DATE',
+                    help='Custom date for upload (format: YYYY-MM-DD). If not provided, uses today\'s date.')
+
+parser.add_argument('-s', '--station',
+                    default='',
+                    metavar='STATION',
+                    help='Station identifier. If not provided, uses STATION environment variable.')
+
 args = parser.parse_args()
 
+# Station validation list
+STATION_LIST = ['0206', '0207', '0208', '0303', '0306', '0307', '0308']
+
 # Wrap the main logic in a loop if benchmark mode is enabled
-def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_arg, benchmark_mode=False):
-
+def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, custom_date='', stationId=''):
+    from datetime import datetime
+    
     orchestrator = orchestrator_arg
-    podID = pod_id_arg
     PodName = pod_name_arg
-    TrueCycleCount = cycle_count_arg
+    podID = ""
+    TrueCycleCount = 0
 
-    # Set Orchestrator ID
-    if not WindowsDebug:
-        while True:
-            while orchestrator == "":
-                orchestrator = input("Enter the Orchestrator ID: ").strip()
-                podID = ""
-                if orchestrator == 'exit' or orchestrator == "":
-                    exit_funct()
-            if "/" in orchestrator:
-                parts = orchestrator.split("/")
-                for part in parts:
-                    if "orchestrator_" in part:
-                        orchestrator = part
-                    elif "pod_" in part:
-                        podID = part
-                    elif "cycle_" in part:
-                        try:
-                            TrueCycleCount = int(part.split("_")[1])
-                        except (ValueError, IndexError) as e:
-                            logger.warning(f"Could not parse cycle count from '{part}': {e}")
-                            TrueCycleCount = 0
-            # Check if orchestrator path exists
-            orchestrator_path = '/home/local/carbon/archive/' + orchestrator + '/'
-            if os.path.isdir(orchestrator_path):
-                break
+    # Main input loop with S3 validation
+    while True:
+        # Get Orchestrator ID first
+        while orchestrator == "":
+            orchestrator = input("Enter the Orchestrator ID: ").strip()
+            if orchestrator == 'exit':
+                exit_funct()
+        
+        # Parse orchestrator path if it contains slashes
+        if "/" in orchestrator:
+            parts = orchestrator.split("/")
+            for part in parts:
+                if "orchestrator_" in part:
+                    orchestrator = part
+                elif "pod_" in part:
+                    podID = part
+                elif "cycle_" in part:
+                    try:
+                        TrueCycleCount = int(part.split("_")[1])
+                    except (ValueError, IndexError) as e:
+                        logger.warning(f"Could not parse cycle count from '{part}': {e}")
+
+        # Validate and prompt for station if not provided or invalid
+        if not stationId or stationId not in STATION_LIST:
+            if stationId and stationId not in STATION_LIST:
+                print(f"Invalid station '{stationId}'. Must be one of: {', '.join(STATION_LIST)}")
+            while True:
+                stationId = input(f"Enter station: ").strip()
+                if stationId in STATION_LIST:
+                    break
+                print(f"Invalid station. Please choose from: {', '.join(STATION_LIST)}")
+
+        # Set date - use today if not provided
+        if not custom_date:
+            custom_date = datetime.now().strftime("%Y-%m-%d")
+        #print(f"Using date: {custom_date}")
+
+        # Prompt for pod ID if not parsed
+        if podID == "":
+            inputt = input("Enter pod ID (e.g., pod_1): ").strip()
+            if inputt.isdigit():
+                podID = "pod_" + str(inputt)
+            elif inputt.startswith("pod_"):
+                podID = inputt
             else:
-                print(f"Orchestrator path '{orchestrator_path}' does not exist. Please enter a valid Orchestrator ID.")
-                orchestrator = ""
+                podID = "pod_1"
 
-    # Set Pod ID / Check if Pod ID was not provided with the orchestrator. If not ask for the index with a default of 1.
-    if podID == "":
-        inputt = input("What is the pod index? ")
-        if inputt.isdigit():
-            podID = "pod_" + str(inputt)
-        else:
-            podID = "pod_1"
+        # Prompt for cycle count if not parsed
+        if TrueCycleCount == 0:
+            inputt = input("Enter total cycle count (default: 1): ").strip()
+            if inputt.isdigit():
+                TrueCycleCount = int(inputt)
+            elif inputt == "":
+                TrueCycleCount = 1
+            else:
+                print("Invalid cycle count. Using default: 1")
+                TrueCycleCount = 1
 
-    # Inquire about total cycles to prevent data loss.
-    if TrueCycleCount == 0:
-        inputt = input("Please enter the total cycle count: ")
-        TrueCycleCount = ''
-        if inputt.isdigit():
-            TrueCycleCount = int(inputt)
-        else:
-            TrueCycleCount = 0
-    # Get the Pod Barcode from generated files. If the files do not exist then the program will print a crash report to terminal.
-    if WindowsDebug:
-        file_path = '' + orchestrator + ''
-        barcode_file = "pod_1\\cycle_1\\dynamic_1\\datamanager_triggers_load_data.data.json"
-    else:
-        file_path = '/home/local/carbon/archive/' + orchestrator + '/'
-        barcode_file = file_path + podID + "/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json"
-
-    if not os.path.exists(barcode_file):
-        logger.error(f"Critical file not found: {barcode_file}. Workflow cannot continue.")
-        if benchmark_mode:
-            return False
-        exit(1)
-
-    podBarcode = read_json_file(barcode_file)
-    if podBarcode is None:
-        logger.error(f"Failed to read barcode file: {barcode_file}. Workflow cannot continue.")
-        if benchmark_mode:
-            return False
-        exit(1)
+        # Build S3 URI and validate
+        s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
+        barcode_s3_uri = s3_base + "cycle_1/dynamic_1/datamanager_triggers_load_data.data.json"
+        
+        print(f"Checking S3 URI: {barcode_s3_uri}")
+        podBarcode = get_json(barcode_s3_uri)
+        
+        if podBarcode is not None:
+            break
+        
+        # S3 validation failed - prompt for retry
+        logger.error(f"Failed to read from S3: {barcode_s3_uri}")
+        print("\nS3 URI validation failed. Please check your inputs.")
+        retry = input("Retry with different inputs? (y/n): ").strip().lower()
+        if retry != 'y':
+            if benchmark_mode:
+                return False
+            exit(1)
+        
+        # Reset for retry
+        orchestrator = ""
+        podID = ""
+        TrueCycleCount = 0
+        stationId = ""
+        custom_date = ""
 
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
     if podBarcode in POD_BARCODE_DATABASE:
@@ -291,16 +324,15 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
         cycles = 0
 
         try:
-            while os.path.isdir(file_path + podID + temp + str(i)):
-                if WindowsDebug:
-                    annotation_file_path = file_path + podID + '\\cycle_' + str(i) + '\\auto_annotation\\_olaf_primary_annotation.data.json'
-                    stow_location_file_path = file_path + podID + '\\cycle_' + str(i) + '\\dynamic_1\\match_output.data.json'
-                else:
-                    annotation_file_path = file_path + podID + '/cycle_' + str(i) + '/auto_annotation/_olaf_primary_annotation.data.json'
-                    stow_location_file_path = file_path + podID + '/cycle_' + str(i) + '/dynamic_1/match_output.data.json'
+            while True:
+                annotation_s3_uri = s3_base + f"cycle_{i}/auto_annotation/_olaf_primary_annotation.data.json"
+                stow_location_s3_uri = s3_base + f"cycle_{i}/dynamic_1/match_output.data.json"
 
-                AnnotationData = read_json_file(annotation_file_path)
-                StowData = read_json_file(stow_location_file_path)
+                AnnotationData = get_json(annotation_s3_uri)
+                StowData = get_json(stow_location_s3_uri)
+                
+                if AnnotationData is None and StowData is None:
+                    break
 
                 # If data exists add it to the nested dictionary.
                 if StowData:
@@ -321,7 +353,8 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                     else:
                         print("cycle_" + str(i) + " does not have a bin ID.")
                 i += 1
-            if cycles >= TrueCycleCount and not os.path.isdir(file_path + podID + temp + str(i + 1)):
+            
+            if cycles >= TrueCycleCount:
                 isDone = True
                 read_success = True
                 current_state = WorkflowState.READ_COMPLETE
@@ -400,15 +433,11 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
                 before_space = podBarcode
 
             orchestratorID = orchestrator + "/" + podID
-            uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            uploadedAT = custom_date if custom_date else datetime.now().strftime("%Y-%m-%d")
 
             # Get system environment variables
             user = os.environ.get('USER')
-            station = os.environ.get('STATION')
-
-            # If benchmark mode is active, always override station to "benchmark"
-            if benchmark_mode:
-                station = "benchmark"
+            station = stationId
 
             # Build the complete document
             clean_document = {
@@ -506,33 +535,42 @@ def run_pick_assistant(orchestrator_arg, pod_id_arg, pod_name_arg, cycle_count_a
             return True
         input("\nPress Enter to retry or Ctrl+C to cancel...")
         print("Retrying...")
-
+def credentials_check():
+    global result, check
+    check = subprocess.run("aws sts get-caller-identity", shell=True, capture_output=True, text=True)
+    result = check.returncode
+    return result
 def exit_funct():
     logger.info('Exiting...')
     exit(1)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
-    # Parse command line arguments
-    orchestrator = args.orchestrator
-    podID = args.podid
-    PodName = args.podname
-    TrueCycleCount = int(args.cycle)
-    benchmark_mode = args.benchmark
-
-    if benchmark_mode:
-        print("\n*** BENCHMARK MODE ENABLED ***")
-        print("Script will loop continuously. Press Ctrl+C to cancel.\n")
-        run_count = 0
-        try:
-            while True:
-                run_count += 1
-                print(f"\n{'='*60}")
-                print(f"Benchmark Run #{run_count}")
-                print(f"{'='*60}\n")
-
-                run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
-        except KeyboardInterrupt:
-            exit_funct()
+    #credentials_check()
+    result = 0
+    if result != 0:
+        subprocess.run("refresh-adroit-credentials")
     else:
-        # Normal single execution
-        run_pick_assistant(orchestrator, podID, PodName, TrueCycleCount, benchmark_mode)
+        # Parse command line arguments
+        orchestrator = args.orchestrator
+        PodName = args.podname
+        benchmark_mode = args.benchmark
+        custom_date = args.date
+        stationId = args.station
+
+        if benchmark_mode:
+            print("\n*** BENCHMARK MODE ENABLED ***")
+            print("Script will loop continuously. Press Ctrl+C to cancel.\n")
+            run_count = 0
+            try:
+                while True:
+                    run_count += 1
+                    print(f"\n{'='*60}")
+                    print(f"Benchmark Run #{run_count}")
+                    print(f"{'='*60}\n")
+
+                    run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+            except KeyboardInterrupt:
+                exit_funct()
+        else:
+            # Normal single execution
+            run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
