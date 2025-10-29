@@ -545,33 +545,40 @@ def exit_funct():
     exit(1)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
-    credentials_check()
-    #result = 0
-    if result != 0:
-        subprocess.run("refresh-adroit-credentials")
+    if credentials_check() != 0:
+        logger.warning("AWS credentials invalid. Attempting refresh...")
+        try:
+            subprocess.run("refresh-adroit-credentials", shell=True, check=True)
+        except subprocess.CalledProcessError:
+            logger.error("Failed to run refresh-adroit-credentials command.")
+        except FileNotFoundError:
+            logger.error("refresh-adroit-credentials command not found.")
+    
+    if credentials_check() != 0:
+        logger.error("AWS credentials still invalid. Exiting.")
+        exit(1)
+    
+    # Parse command line arguments
+    orchestrator = args.orchestrator
+    PodName = args.podname
+    benchmark_mode = args.benchmark
+    custom_date = args.date
+    stationId = args.station
+
+    if benchmark_mode:
+        print("\n*** BENCHMARK MODE ENABLED ***")
+        print("Script will loop continuously. Press Ctrl+C to cancel.\n")
+        run_count = 0
+        try:
+            while True:
+                run_count += 1
+                print(f"\n{'='*60}")
+                print(f"Benchmark Run #{run_count}")
+                print(f"{'='*60}\n")
+
+                run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+        except KeyboardInterrupt:
+            exit_funct()
     else:
-        # Parse command line arguments
-        orchestrator = args.orchestrator
-        PodName = args.podname
-        benchmark_mode = args.benchmark
-        custom_date = args.date
-        stationId = args.station
-
-        if benchmark_mode:
-            print("\n*** BENCHMARK MODE ENABLED ***")
-            print("Script will loop continuously. Press Ctrl+C to cancel.\n")
-            run_count = 0
-            try:
-                while True:
-                    run_count += 1
-                    print(f"\n{'='*60}")
-                    print(f"Benchmark Run #{run_count}")
-                    print(f"{'='*60}\n")
-
-                    run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
-            except KeyboardInterrupt:
-                exit_funct()
-        else:
-            # Normal single execution
-
-            run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+        # Normal single execution
+        run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
