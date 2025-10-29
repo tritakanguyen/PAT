@@ -545,8 +545,8 @@ def exit_funct():
     exit(1)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
-    #credentials_check()
-    result = 0
+    credentials_check()
+    #result = 0
     if result != 0:
         subprocess.run("refresh-adroit-credentials")
     else:
@@ -573,4 +573,5 @@ if __name__ == "__main__":
                 exit_funct()
         else:
             # Normal single execution
+
             run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
