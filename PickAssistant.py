@@ -12,6 +12,7 @@ Authors:
     - mathar (Matt Harrison)
 
 Version History:
+    v2.1: Minor refactor for migrate to read from s3 bucket
     v2.0: Major refactor for improved error handling, logging, and integration to webapp.
     v1.17: Use OLAF instead of human annotations.
     v1.15: Added pod barcode database to automatically look up the pod name.
@@ -60,7 +61,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print("PickAssistant v2.0")
+print("PickAssistant v2.1")
 
 # Workflow State Management
 class WorkflowState(Enum):
@@ -585,4 +586,5 @@ if __name__ == "__main__":
             exit_funct()
     else:
         # Normal single execution
+
         run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
