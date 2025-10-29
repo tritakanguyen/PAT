@@ -286,7 +286,8 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
         s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
         barcode_s3_uri = s3_base + "cycle_1/dynamic_1/datamanager_triggers_load_data.data.json"
         
-        print(f"Checking S3 URI: {barcode_s3_uri}")
+        logger.info(f"Checking S3 URI: {s3_base}")
+        logger.info(f"S3 URI is valid. Proceeding...")
         podBarcode = get_json(barcode_s3_uri)
         
         if podBarcode is not None:
@@ -501,17 +502,16 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
             # Insert document into cleans collection
             result = cleans_collection.insert_one(clean_document)
 
-            logger.info(f"  Pick list uploaded successfully")
-            logger.info(f"  Document ID: {result.inserted_id}")
+            logger.info(f"Pick list uploaded successfully")
+            logger.info(f"Document ID: {result.inserted_id}")
             # Close connection
             client.close()
-            logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            logger.info(f"  Pod: {PodName} ({podBarcode})")
-            logger.info(f"  Orchestrator: {orchestratorID}")
+            logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Pod: {PodName} ({podBarcode})")
+            logger.info(f"Orchestrator: {orchestratorID}")
             if benchmark_mode:
                 if podFace == "A":
-                    logger.info(f"  Awaiting {PodName} C face")
-
+                    logger.info(f"Awaiting {PodName} C face")
             upload_success = True
             current_state = WorkflowState.UPLOAD_COMPLETE
             logger.info(f"State: {current_state.value}")
@@ -521,13 +521,13 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
             upload_success = False
             current_state = WorkflowState.UPLOAD_FAILED
             logger.error(f"State: {current_state.value} - PyMongo not installed")
-            print("  Document was prepared but not uploaded")
+            logger.error(f"Document was prepared but not uploaded")
             return False
         except Exception as e:
             upload_success = False
             current_state = WorkflowState.UPLOAD_FAILED
             logger.error(f"State: {current_state.value} - {e}")
-            print("  Document was prepared but upload failed")
+            logger.error(f"Document was prepared but upload failed")
             return False
 
     while True:
