@@ -545,19 +545,20 @@ def exit_funct():
     exit(1)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
-    if credentials_check() != 0:
-        print("\nAWS credentials invalid. Launching refresh-adroit-credentials...\n")
-        subprocess.run("refresh-adroit-credentials", shell=True)
-        if credentials_check() != 0:
-            print("\nCredentials still invalid. Exiting.\n")
-            exit(1)
-    
-    # Parse command line arguments
+    # Parse command line arguments first
     orchestrator = args.orchestrator
     PodName = args.podname
     benchmark_mode = args.benchmark
     custom_date = args.date
     stationId = args.station
+    
+    # Check AWS credentials
+    if credentials_check() != 0:
+        print("\nAWS credentials invalid. Launching refresh-adroit-credentials...\n")
+        subprocess.run("zsh -i -c refresh-adroit-credentials", shell=True)
+        if credentials_check() != 0:
+            print("\nCredentials still invalid. Exiting.\n")
+            exit(1)
 
     if benchmark_mode:
         print("\n*** BENCHMARK MODE ENABLED ***")
