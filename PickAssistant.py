@@ -546,17 +546,11 @@ def exit_funct():
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
     if credentials_check() != 0:
-        logger.warning("AWS credentials invalid. Attempting refresh...")
-        try:
-            subprocess.run("refresh-adroit-credentials", shell=True, check=True)
-        except subprocess.CalledProcessError:
-            logger.error("Failed to run refresh-adroit-credentials command.")
-        except FileNotFoundError:
-            logger.error("refresh-adroit-credentials command not found.")
-    
-    if credentials_check() != 0:
-        logger.error("AWS credentials still invalid. Exiting.")
-        exit(1)
+        print("\nAWS credentials invalid. Launching refresh-adroit-credentials...\n")
+        subprocess.run("refresh-adroit-credentials", shell=True)
+        if credentials_check() != 0:
+            print("\nCredentials still invalid. Exiting.\n")
+            exit(1)
     
     # Parse command line arguments
     orchestrator = args.orchestrator
