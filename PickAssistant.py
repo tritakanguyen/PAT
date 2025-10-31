@@ -12,7 +12,6 @@ Authors:
     - mathar (Matt Harrison)
 
 Version History:
-    v2.1: Minor refactor for migrate to read from s3 bucket
     v2.0: Major refactor for improved error handling, logging, and integration to webapp.
     v1.17: Use OLAF instead of human annotations.
     v1.15: Added pod barcode database to automatically look up the pod name.
@@ -61,7 +60,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print("PickAssistant v2.1")
+print("PickAssistant v2.0")
 
 # Workflow State Management
 class WorkflowState(Enum):
@@ -217,7 +216,7 @@ STATION_LIST = ['0206', '0207', '0208', '0303', '0306', '0307', '0308']
 
 # Wrap the main logic in a loop if benchmark mode is enabled
 def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, custom_date='', stationId=''):
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     orchestrator = orchestrator_arg
     PodName = pod_name_arg
@@ -259,7 +258,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
         # Prompt for date if not provided
         if not custom_date:
             date_input = input("Enter date (YYYY-MM-DD) or press Enter for today: ").strip()
-            custom_date = date_input if date_input else datetime.now().strftime("%Y-%m-%d")
+            custom_date = date_input if date_input else datetime.now(timezone.utc).strftime("%Y-%m-%d")
         print(f"Using date: {custom_date}")
 
         # Prompt for pod ID if not parsed
@@ -586,5 +585,4 @@ if __name__ == "__main__":
             exit_funct()
     else:
         # Normal single execution
-
         run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
