@@ -260,7 +260,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
         # Prompt for date if not provided
         if not custom_date:
             date_input = input("Enter date (YYYY-MM-DD) or press Enter for today: ").strip()
-            custom_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            custom_date = date_input if date_input else datetime.now(timezone.utc).strftime("%Y-%m-%d")
         print(f"Using date: {custom_date}")
 
         # Prompt for pod ID if not parsed
@@ -437,7 +437,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
                 before_space = podBarcode
 
             orchestratorID = orchestrator + "/" + podID
-            uploadedAT = custom_date if custom_date else datetime.now().strftime("%Y-%m-%d")
+            uploadedAT = datetime.now().strftime("%Y-%m-%d")
 
             # Get system environment variables
             user = os.environ.get('USER')
@@ -589,3 +589,4 @@ if __name__ == "__main__":
         # Normal single execution
 
         run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+
