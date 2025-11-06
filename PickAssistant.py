@@ -229,7 +229,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
     while True:
         # Get Orchestrator ID first
         while orchestrator == "":
-            orchestrator = input("Enter the Orchestrator ID: ").strip()
+            orchestrator = input("Enter the ID: ").strip()
             if orchestrator == 'exit':
                 exit_funct()
         
@@ -296,7 +296,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
         podFace = get_json(pod_face_s3_uri)
         
         if podId is not None and podType is not None and podFace is not None:
-            podBarcode = podId + podType + podFace
+            podBarcode = podId + " " + podType + "-" + podFace
             logger.info(f"S3 URI is valid. Proceeding...")
             break
         
@@ -430,24 +430,8 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
 
         # Prepare cleaning data document FIRST (before any DB connection)
         try:
-            # Parse pod barcode information
-            if podBarcode and " " in podBarcode and "-" in podBarcode:
-                try:
-                    after_space = podBarcode.split(" ")[1]
-                    before_space = podBarcode.split(" ")[0]
-                    podFace = after_space.split("-")[1]
-                    podType = after_space.split("-")[0]
-                except (IndexError, AttributeError):
-                    podType = "Unknown"
-                    podFace = "Unknown"
-                    before_space = podBarcode
-            else:
-                podType = "Unknown"
-                podFace = "Unknown"
-                before_space = podBarcode
-
-            orchestratorID = orchestrator + "/" + podID
-            uploadedAT = custom_date if custom_date else datetime.now().strftime("%Y-%m-%d")
+            orchestratorID = orchestrator
+            uploadedAT = datetime.now().strftime("%Y-%m-%d")
 
             # Get system environment variables
             user = os.environ.get('USER')
@@ -456,7 +440,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
             # Build the complete document
             clean_document = {
                 "_id": str(uuid.uuid4()),
-                "podBarcode": before_space,
+                "podBarcode": podId,
                 "podName": PodName,
                 "orchestratorId": orchestratorID,
                 "podType": podType,
