@@ -44,45 +44,13 @@ import json
 import os
 import argparse
 import time
-import logging
-import tempfile
-from urllib.parse import urlparse
-import uuid
-import boto3
-import subprocess
-from enum import Enum
 
-from typing import Dict, List, Optional, Tuple
+print ("Stage 1 release deployed")
+print ("PickAssistant v1.18")
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+WindowsDebug = False # switch to False if you are on a workcell.
 
-print("PickAssistant v2.2")
-
-# Workflow State Management
-class WorkflowState(Enum):
-    READING_FILES = "reading_files"
-    READ_COMPLETE = "read_complete"
-    READ_FAILED = "read_failed"
-    GENERATING_CONTENT = "generating_content"
-    GENERATION_COMPLETE = "generation_complete"
-    GENERATION_FAILED = "generation_failed"
-    UPLOADING_DATABASE = "uploading_database"
-    UPLOAD_COMPLETE = "upload_complete"
-    UPLOAD_FAILED = "upload_failed"
-
-current_state = WorkflowState.READING_FILES
-read_success = False
-generation_success = False
-upload_success = False
-
-# Pod Barcode Database - Maps pod barcodes to friendly names
-POD_BARCODE_DATABASE = {
+podBarcodeDatabase = {
     "HB05101914818 H12-A" : "Ninja Turtle",
     "HB05101914818 H12-C" : "Ninja Turtle",
     "HB05109809243 H11-A" : "Ninja Turtle",
@@ -212,74 +180,95 @@ parser.add_argument('-s', '--station',
                     help='Station identifier. If not provided, uses STATION environment variable.')
 
 args = parser.parse_args()
+orchestrator=args.orchestrator
+podID=args.podid
+PodName=args.podname
+TrueCycleCount = int(args.cyclecount)
 
-# Station validation list
-STATION_LIST = ['0206', '0207', '0208', '0303', '0306', '0307', '0308']
+#Set Orchestrastor ID
+if not WindowsDebug:
+    while orchestrator =="":
+        orchestrator = input("Enter the Orchestrator ID: ")
+        podID=""
+if "/" in orchestrator:
+    parts=orchestrator.split("/")
+    for part in parts:
+        if "orchestrator_" in part:
+            orchestrator=part
+        elif "pod_" in part:
+            podID=part
+        elif "cycle_" in part:
+            try:
+                TrueCycleCount = int(part.split("_")[1])
+            except Exception as e:
+                TrueCycleCount = 0
 
-# Wrap the main logic in a loop if benchmark mode is enabled
-def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, custom_date='', stationId=''):
-    from datetime import datetime, timezone
-    
-    orchestrator = orchestrator_arg
-    PodName = pod_name_arg
-    podID = ""
-    TrueCycleCount = 0
+#Set Pod ID / Check if Pod ID was not provided with the orchestrator. If not ask for the index with a default of 1.
+if podID=="":
+    inputt = input("What is the pod index? ")
+    if inputt.isdigit():
+        podID="pod_"+str(inputt)
+    else:
+        podID="pod_1"
 
-    # Main input loop with S3 validation
-    while True:
-        # Get Orchestrator ID first
-        while orchestrator == "":
-            orchestrator = input("Enter the Orchestrator ID: ").strip()
-            if orchestrator == 'exit':
-                exit_funct()
-        
-        # Parse orchestrator path if it contains slashes
-        if "/" in orchestrator:
-            parts = orchestrator.split("/")
-            for part in parts:
-                if "orchestrator_" in part:
-                    orchestrator = part
-                elif "pod_" in part:
-                    podID = part
-                elif "cycle_" in part:
-                    try:
-                        TrueCycleCount = int(part.split("_")[1])
-                    except (ValueError, IndexError) as e:
-                        logger.warning(f"Could not parse cycle count from '{part}': {e}")
+#inquire about total cycles to prevent data loss.
+if TrueCycleCount==0:
+    inputt = input("Please enter the total cycle count: ")
+    if inputt.isdigit():
+        TrueCycleCount=int(inputt)
 
-        # Validate and prompt for station if not provided or invalid
-        if not stationId or stationId not in STATION_LIST:
-            if stationId and stationId not in STATION_LIST:
-                print(f"Invalid station '{stationId}'. Must be one of: {', '.join(STATION_LIST)}")
-            while True:
-                stationId = input(f"Enter station: ").strip()
-                if stationId in STATION_LIST:
-                    break
-                print(f"Invalid station. Please choose from: {', '.join(STATION_LIST)}")
+#Get the Pod Barcode from generated files. If the files do not exist then the program will print a crash report to terminal.
+if WindowsDebug:
+    file_path = ''+orchestrator+''
+    podBarcode = read_json_file("pod_1\\cycle_1\\dynamic_1\\datamanager_triggers_load_data.data.json")
+else:
+    file_path = '/home/local/carbon/archive/'+orchestrator+'/'
+    podBarcode = read_json_file(file_path+podID+"/cycle_1/dynamic_1/datamanager_triggers_load_data.data.json")
 
-        # Prompt for date if not provided
-        if not custom_date:
-            date_input = input("Enter date (YYYY-MM-DD) or press Enter for today: ").strip()
-            custom_date = date_input if date_input else datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        print(f"Using date: {custom_date}")
+#Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
+if podBarcode in podBarcodeDatabase:
+    PodName= podBarcodeDatabase[podBarcode]
+if PodName=="":
+    PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
+else:
+    print (PodName," was found via the barcode")
 
-        # Prompt for pod ID if not parsed
-        if podID == "":
-            inputt = input("Enter pod ID (e.g., pod_1): ").strip()
-            if inputt.isdigit():
-                podID = "pod_" + str(inputt)
-            elif inputt.startswith("pod_"):
-                podID = inputt
-            else:
-                podID = "pod_1"
+#Get Pod barcode/ID
+# if WindowsDebug:
+#     temp="\\cycle_"
+#     pod_data_file_path = file_path+podID+'\\cycle_1\\dynamic_1\\workcell_metric_latest_pod_visit.data.json'
+# else:
+#     temp="/cycle_"
+#     pod_data_file_path = file_path+podID+'/cycle_1/dynamic_1/workcell_metric_latest_pod_visit.data.json'
+# PodData = read_json_file(pod_data_file_path)
 
-        # Prompt for cycle count if not parsed
-        if TrueCycleCount == 0:
-            inputt = input("Enter total cycle count (default: 1): ").strip()
-            if inputt.isdigit():
-                TrueCycleCount = int(inputt)
-            elif inputt == "":
-                TrueCycleCount = 1
+#Loop through each cycle and gather data. | If missing data restart loop
+isDone = False
+while not isDone:
+    i=1
+    StowedItems={}
+    AttemptedStows={}
+    temp="/cycle_"
+    cycles = 0
+
+    while os.path.isdir(file_path+podID+temp+str(i)):
+        if WindowsDebug:
+            annotation_file_path = file_path+podID+'\\cycle_'+str(i)+'\\auto_annotation\\_olaf_primary_annotation.data.json'
+            stow_location_file_path = file_path+podID+'\\cycle_'+str(i)+'\\dynamic_1\\match_output.data.json'
+        else:
+            annotation_file_path = file_path+podID+'/cycle_'+str(i)+'/auto_annotation/_olaf_primary_annotation.data.json'
+            stow_location_file_path = file_path+podID+'/cycle_'+str(i)+'/dynamic_1/match_output.data.json'
+        AnnotationData = read_json_file(annotation_file_path)
+        StowData = read_json_file(stow_location_file_path)
+
+        #If data exists add it to the nested dictionary.
+        if StowData:
+            cycles+=1
+            if StowData["binId"]:
+                if AnnotationData and AnnotationData["isStowedItemInBin"]:
+                    StowedItems['/cycle_'+str(i)]={"itemFcsku":StowData["itemFcsku"],"binId":StowData["binId"],"binScannableId":StowData["binScannableId"]}
+                else:
+                    AttemptedStows['/cycle_'+str(i)]={"itemFcsku":StowData["itemFcsku"],"binId":StowData["binId"],"binScannableId":StowData["binScannableId"]}
             else:
                 print("Invalid cycle count. Using default: 1")
                 TrueCycleCount = 1
@@ -317,86 +306,170 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
     if PodName == "":
         PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
     else:
-        logger.info(f"{PodName} was found via the barcode")
+        print("Cycles missing (",cycles,"/",TrueCycleCount,"), retrying...")
+        time.sleep(1)
 
-    isDone = False
-    while not isDone:
-        i = 1
-        StowedItems = {}
-        AttemptedStows = {}
-        temp = "/cycle_"
-        cycles = 0
+stowedPodFace = [
+        ["Pod","1","2","3","4"],
+        ["m",[],[],[],[]],
+        ["l",[],[],[],[]],
+        ["k",[],[],[],[]],
+        ["j",[],[],[],[]],
+        ["i",[],[],[],[]],
+        ["h",[],[],[],[]],
+        ["g",[],[],[],[]],
+        ["f",[],[],[],[]],
+        ["e",[],[],[],[]],
+        ["d",[],[],[],[]],
+        ["c",[],[],[],[]],
+        ["b",[],[],[],[]],
+        ["a",[],[],[],[]]
+    ]
 
-        try:
-            while True:
-                annotation_s3_uri = s3_base + f"cycle_{i}/auto_annotation/_olaf_primary_annotation.data.json"
-                stow_location_s3_uri = s3_base + f"cycle_{i}/dynamic_1/match_output.data.json"
+StowedTotal= stowedPodFace
 
-                AnnotationData = get_json(annotation_s3_uri)
-                StowData = get_json(stow_location_s3_uri)
-                
-                if AnnotationData is None and StowData is None:
-                    break
+#Storing item barcodes in arrays associated with its bin location in a 2d array mockup of the pod.
+for items in StowedItems:
+    bin = StowedItems[items]["binId"][-2:]
+    stowedPodFace[13-(ord(bin[1])-ord('a'))][int(bin[0])].append(StowedItems[items]["itemFcsku"])
+    print (items," - ",StowedItems[items]["itemFcsku"]," - ",StowedItems[items]["binId"]," - ",StowedItems[items]["binScannableId"])
 
-                # If data exists add it to the nested dictionary.
-                if StowData:
-                    cycles += 1
-                    if StowData.get("binId"):
-                        if AnnotationData and AnnotationData.get("isStowedItemInBin"):
-                            StowedItems['/cycle_' + str(i)] = {
-                                "itemFcsku": StowData.get("itemFcsku"),
-                                "binId": StowData.get("binId"),
-                                "binScannableId": StowData.get("binScannableId")
-                            }
-                        else:
-                            AttemptedStows['/cycle_' + str(i)] = {
-                                "itemFcsku": StowData.get("itemFcsku"),
-                                "binId": StowData.get("binId"),
-                                "binScannableId": StowData.get("binScannableId")
-                            }
-                    else:
-                        logger.info(f"cycle_" + str(i) + " does not have a bin ID.")
-                i += 1
-            
-            if cycles >= TrueCycleCount:
-                isDone = True
-                read_success = True
-                current_state = WorkflowState.READ_COMPLETE
-                logger.info(f"State: {current_state.value}")
-            else:
-                logger.info(f"Cycles missing ({cycles}/{TrueCycleCount}), retrying...")
-                time.sleep(1)
-        except Exception as e:
-            read_success = False
-            current_state = WorkflowState.READ_FAILED
-            logger.error(f"State: {current_state.value} - {e}")
-            raise
+#Builds Bin toltals into a 2d Array.
+for row in range(len(stowedPodFace)):
+        if row > 0:
+            for col in range (5):
+                if col > 0:
+                    if stowedPodFace[row][col] != None:
+                        StowedTotal[row][col] = len(stowedPodFace[row][col])
 
-    # Adds / reorders the list of items into bin location by alphabetic order first then numerical.
-    if not read_success:
-        logger.error("Cannot proceed to GENERATING_CONTENT: READ_COMPLETE not achieved")
-        raise RuntimeError("State transition blocked: reading files did not complete successfully")
 
-    current_state = WorkflowState.GENERATING_CONTENT
-    logger.info(f"State: {current_state.value}")
+output = "Pod: "+str(PodName)+"\n"+podBarcode+"\n\n"+"Orchestrator: "+str(orchestrator+"/"+podID)+"\n\n"+str(printPod(StowedTotal))
+output += "\n"
+#Adds / reorders the list of items into bin location by alphabetic order first then numerical.
+itemss=[]
+for item in StowedItems:
+    itemss.append([StowedItems[item]["binId"],StowedItems[item]["itemFcsku"]])
+itemss.sort(key=lambda x: x[0][-1]+x[0][-2])
 
+#Adds / reorders the list of likely failed stows.
+bitemss = []
+for item in AttemptedStows:
+    bitemss.append([AttemptedStows[item]["binId"],AttemptedStows[item]["itemFcsku"]])
+bitemss.sort(key=lambda x: x[0][-1]+x[0][-2])
+
+#Adds successfull stowed items to the output Barcode : Location
+for i in itemss:
+    output += f"{i[1]} : {i[0]}\n"
+i_count = len(itemss)
+
+#Adds stowed to adjacent bin items to
+if bitemss:
+    output += "\nBins where stows were attempted but likely not successful:\n"
+    for item in bitemss:
+        output += f"{item[1]} : {item[0]}\n"
+
+output += f"\n{i_count}/{cycles} {round((i_count/cycles*100),2)}%"
+
+print ("")
+print (output)
+
+if TrueCycleCount > cycles:
+    print ("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount-cycles),"cycles unaccounted for.")
+
+#Copy output to clipboard if xclip is installed.
+if not WindowsDebug:
+    from subprocess import Popen, PIPE
+    def copy2clip(text):
+        p = Popen(['xclip', '-selection','clipboard'],stdin=PIPE)
+        p.communicate(input=text.encode('utf-8'))
+
+    #copy2clip(output)
+print ("Release testing completed")
+print ("Copy to clipboard has been deactivated")
+
+#Upload to database
+def upload_to_cleans_collection():
     try:
-        itemss = []
-        for item in StowedItems:
-            itemss.append([StowedItems[item]["binId"], StowedItems[item]["itemFcsku"]])
-        itemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+        from pymongo import MongoClient
+        from datetime import datetime
+        import uuid
 
-        # Adds / reorders the list of likely failed stows.
-        bitemss = []
-        for item in AttemptedStows:
-            bitemss.append([AttemptedStows[item]["binId"], AttemptedStows[item]["itemFcsku"]])
-        bitemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+        # MongoDB connection string with provided credentials
+        connection_string = "mongodb+srv://workcellupload:VTRqz1YWdHreZT0t@podmanagement.yv8dt9t.mongodb.net/?retryWrites=true&w=majority"
 
-        i_count = len(itemss)
+        # Connect to MongoDB
+        client = MongoClient(connection_string)
 
-        generation_success = True
-        current_state = WorkflowState.GENERATION_COMPLETE
-        logger.info(f"State: {current_state.value}")
+        # Select database and collection
+        db = client['podManagement']
+        cleans_collection = db['cleans']
+
+        # Prepare cleaning data document
+        if podBarcode and " " in podBarcode and "-" in podBarcode:
+            try:
+                # Split by space and get the part after space, then split by hyphen and get first part
+                after_space = podBarcode.split(" ")[1]
+                podFace = after_space.split("-")[1]
+                podType = after_space.split("-")[0]
+            except (IndexError, AttributeError):
+                podType = "Unknown"
+        orchestratorID = orchestrator + "/" + podID
+        uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Get system environment variables
+        user = os.environ.get('USER')
+        station = os.environ.get('STATION')
+
+        clean_document = {
+            "_id": str(uuid.uuid4()),  # Generate unique ID
+            "podBarcode": podBarcode,
+            "podName": PodName,
+            "orchestratorId": orchestratorID,
+            "podType": podType,
+            "podFace": podFace,
+            "stowedItems": [],
+            "attemptedStows": [],
+            "uploadAt": uploadedAT,
+            "status": "incomplete",
+            "totalItems": i_count,
+            "user": user,
+            "station": station
+        }
+
+        # Add stowed items data
+        for item_data in itemss:
+            clean_document["stowedItems"].append({
+                "itemFcsku": item_data[1],
+                "binId": item_data[0],
+                "status": "stowed"
+            })
+
+        # Add attempted stows data
+        for item_data in bitemss:
+            clean_document["attemptedStows"].append({
+                "itemFcsku": item_data[1],
+                "binId": item_data[0],
+                "status": "attempted"
+            })
+
+        # Insert document into cleans collection
+        result = cleans_collection.insert_one(clean_document)
+
+        #print(f"\n✓ Successfully uploaded cleaning data to MongoDB 'cleans' collection")
+        #print(f"  Document ID: {result.inserted_id}")
+        print(f"  PickAssistant v2.0 deploy on Oct 22nd")
+        print(f"  Pod: {PodName} ({podBarcode}) has uploaded to PMS")
+        #print(f"  Items processed: {i_count}/{cycles}")
+        print(f"  Access result at url below")
+        print(f"  https://pms-xyhg.onrender.com/")
+
+        # Close connection
+        client.close()
+
+        return True
+
+    except ImportError:
+        print("\n! PyMongo not installed. Install with: pip install pymongo")
+        return False
     except Exception as e:
         generation_success = False
         current_state = WorkflowState.GENERATION_FAILED
@@ -589,4 +662,7 @@ if __name__ == "__main__":
         # Normal single execution
 
         run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+
+
+
 
