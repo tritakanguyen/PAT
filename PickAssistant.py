@@ -131,9 +131,9 @@ POD_BARCODE_DATABASE = {
     "HB05100404685 H10-C" : "Pod Father"
 }
 
-s3_uri_main = "s3://stow-carbon-copy/Atlas/${stationId}/${date}/${orchestrator}/${PodID}/cycle_${CycleID}/dynamic_1/"
-podID_uri = s3_uri_main + "datamanager_triggers_load_data.data.json"
-match_output_uri = s3_uri_main + "match_output.data.json"
+#s3_uri_main = "s3://stow-carbon-copy/Atlas/${stationId}/${date}/${orchestrator}/${PodID}/cycle_${CycleID}/dynamic_1/"
+#podID_uri = s3_uri_main + "3_scene_pod.data.json"
+#match_output_uri = s3_uri_main + "match_output.data.json"
 
 def get_json(s3_uri: str) -> Optional[Dict]:
     """
@@ -286,18 +286,28 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
 
         # Build S3 URI and validate
         s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
-        barcode_s3_uri = s3_base + "cycle_1/dynamic_1/datamanager_triggers_load_data.data.json"
-        
+        pod_id_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_id.data.json"
+        pod_type_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_fba_family.data.json"
+        pod_face_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_face.data.json"
         logger.info(f"Checking S3 URI: {s3_base}")
-        logger.info(f"S3 URI is valid. Proceeding...")
-        podBarcode = get_json(barcode_s3_uri)
         
-        if podBarcode is not None:
+        podId = get_json(pod_id_s3_uri)
+        podType = get_json(pod_type_s3_uri)
+        podFace = get_json(pod_face_s3_uri)
+        
+        if podId is not None and podType is not None and podFace is not None:
+            podBarcode = podId + podType + podFace
+            logger.info(f"S3 URI is valid. Proceeding...")
             break
         
         # S3 validation failed - prompt for retry
-        logger.error(f"Failed to read from S3: {barcode_s3_uri}")
-        print("\nS3 URI validation failed. Please check your inputs.")
+        logger.error("Failed to read from S3. Missing files:")
+        if podId is None:
+            logger.error(f"  - {pod_id_s3_uri}")
+        if podType is None:
+            logger.error(f"  - {pod_type_s3_uri}")
+        if podFace is None:
+            logger.error(f"  - {pod_face_s3_uri}")
         retry = input("Retry with different inputs? (y/n): ").strip().lower()
         if retry != 'y':
             if benchmark_mode:
