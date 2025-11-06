@@ -431,7 +431,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
         # Prepare cleaning data document FIRST (before any DB connection)
         try:
             orchestratorID = orchestrator
-            uploadedAT = datetime.now().strftime("%Y-%m-%d")
+            uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M")
 
             # Get system environment variables
             user = os.environ.get('USER')
@@ -478,7 +478,7 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
         try:
             from pymongo import MongoClient
 
-            logger.info("  Connecting to MongoDB...")
+            logger.info(f"Connecting to MongoDB...")
 
             # Set MONGODB_URI environment variable before running this script
             connection_string = os.environ.get('MONGODB_URI')
