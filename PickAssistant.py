@@ -451,7 +451,8 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
                 "status": "incomplete",
                 "totalItems": i_count,
                 "user": user,
-                "station": station
+                "station": station,
+                "isBenchmark": benchmark_mode
             }
 
             # Add stowed items data
