@@ -1,28 +1,43 @@
 
 """
-    Pick Assistant Tool:
-    Authors: djoneben (Ben Jones), grsjoshu (Joshua Green), & (Tri Nguyen) ftnguyen
-    v1.17.
-        Use OLAF instead of human annotations.
-    v1.15:
-        Added pod barcode database to automatically look up the pod name.
-    v1.14:
-        Fixed bug in string construction caused by a file not being generated on Ubuntu 24
-    v1.13:
-        Fixed bug in argument parser
-    v1:12:
-        Fixed cycle loop runaway logic.
-        Reenabled SSH functionality.
-    v1.11:
-        Loop the program if missing data.
-    v1.10:
-        Revived v1.4 feature for not crashing durning planed recycle
-    v1.9:
-        Added in checks to alert potencial data loss.
-    v1.8:
-        Added Better comments.
-        More accurate cycle count.
-        Tidied up the code to make it readable.
+Pick Assistant Tool - Pod Stow Data Processing and Upload System
+
+This tool analyzes pod stow data from orchestrator archives, processes the information,
+and uploads it to a MongoDB database for tracking and management.
+
+Authors:
+    - djoneben (Ben Jones)
+    - grsjoshu (Joshua Green)
+    - ftnguyen (Tri Nguyen)
+    - mathar (Matt Harrison)
+
+Version History:
+    v2.2: Bug fix for out synced s3 timezone issue
+    v2.1: Minor refactor for migrate to read from s3 bucket
+    v2.0: Major refactor for improved error handling, logging, and integration to webapp.
+    v1.17: Use OLAF instead of human annotations.
+    v1.15: Added pod barcode database to automatically look up the pod name.
+    v1.14: Fixed bug in string construction caused by a file not being generated on Ubuntu 24
+    v1.13: Fixed bug in argument parser
+    v1.12: Fixed cycle loop runaway logic. Reenabled SSH functionality.
+    v1.11: Loop the program if missing data.
+    v1.10: Revived v1.4 feature for not crashing during planned recycle
+    v1.9: Added in checks to alert potential data loss.
+    v1.8: Added better comments. More accurate cycle count. Tidied up the code.
+
+Usage:
+    # Basic usage with orchestrator ID
+    python PickAssistant.py -o orchestrator_20251007_123456/pod_1/cycle_50
+
+    # Specify individual parameters
+    python PickAssistant.py -o orchestrator_20251007_123456 -p pod_1 -c 50
+
+    # Run in benchmark mode (continuous loop)
+    python PickAssistant.py -bm -o orchestrator_20251007_123456 -p pod_1 -c 50
+
+Environment Variables Required:
+    MONGODB_URI: MongoDB connection string for database upload
+
 """
 
 import json
@@ -84,42 +99,85 @@ podBarcodeDatabase = {
     "HB05100404685 H10-C" : "Pod Father"
 }
 
-def read_json_file(file_path):
-    try:
-        with open(file_path, 'r') as file:
-            data = json.load(file)
-        return data
-    except FileNotFoundError:
-        print(f"Error: File '{file_path}' not found.")
-    except json.JSONDecodeError:
-        print(f"Error: Invalid JSON format in file '{file_path}'.")
-    except Exception as e:
-        print(f"An error occurred while reading the JSON file: {e}")
+s3_uri_main = "s3://stow-carbon-copy/Atlas/${stationId}/${date}/${orchestrator}/${PodID}/cycle_${CycleID}/dynamic_1/"
+podID_uri = s3_uri_main + "datamanager_triggers_load_data.data.json"
+match_output_uri = s3_uri_main + "match_output.data.json"
 
-def printPod (PodFace,mode="int"):
-    display=""
-    if mode == "int":
-        for row in PodFace:
-            temp=("|")
-            for col in row:
-                t = col
-                if t==0:
-                    t = " "
-                temp= temp+ (f"{t:^5}|")
-            display+=temp+"\n"
-            display+="-"*(len(row)*6 +1)+"\n"
-    else:
-        for bin in PodFace:
-            print (bin)
-            display += bin +"\n"
-    return display
+def get_json(s3_uri: str) -> Optional[Dict]:
+    """
+    Read and parse a JSON file from S3.
+
+    Args:
+        s3_uri: S3 URI (e.g., s3://bucket/path/to/file.json)
+
+    Returns:
+        Parsed JSON data as dictionary, or None if error occurs
+    """
+    try:
+        s3 = boto3.client('s3')
+        parsed = urlparse(s3_uri)
+        bucket = parsed.netloc
+        key = parsed.path.lstrip('/')
+        
+        response = s3.get_object(Bucket=bucket, Key=key)
+        json_content = response['Body'].read().decode('utf-8')
+        data = json.loads(json_content)
+        return data
+    except Exception as e:
+        if 'NoSuchKey' in str(e):
+            logger.info(f"S3 file '{s3_uri}' not found.")
+        elif 'JSONDecodeError' in str(type(e).__name__):
+            logger.error(f"Invalid JSON format in S3 file '{s3_uri}'.")
+        else:
+            logger.error(f"Error reading S3 file: {e}")
+    return None
+
 
 # To allow for PickAssistant to be called remotly via SSH.
-parser = argparse.ArgumentParser()
-parser.add_argument('-o',"--orchestrator",default='')
-parser.add_argument('-p',"--podid",default='')
-parser.add_argument('-n',"--podname",default='')
-parser.add_argument('-c',"--cyclecount",default=0)
+parser = argparse.ArgumentParser(
+    description='Pick Assistant Tool - Analyzes pod stow data from orchestrator archives',
+    epilog='''
+Examples:
+  # Basic usage with orchestrator ID
+  python PickAssistant.py -o orchestrator_20251007_123456/pod_1/cycle_50
+
+  # Specify individual parameters
+  python PickAssistant.py -o orchestrator_20251007_123456 -p pod_1 -c 50
+
+  # Run in benchmark mode (continuous loop)
+  python PickAssistant.py -bm -o orchestrator_20251007_123456 -p pod_1 -c 50
+
+  # With custom pod name
+  python PickAssistant.py -o orchestrator_20251007_123456 -n "Ninja Turtle" -c 50
+
+For more information, contact: djoneben, grsjoshu, or ftnguyen
+    ''',
+    formatter_class=argparse.RawDescriptionHelpFormatter
+)
+
+parser.add_argument('-o', '--orchestrator',
+                    default='',
+                    metavar='ID',
+                    help='Orchestrator ID (can include pod and cycle info, e.g., orchestrator_123/pod_1/cycle_50)')
+
+parser.add_argument('-n', '--podname',
+                    default='',
+                    metavar='NAME',
+                    help='Pod name/identifier (e.g., "Ninja Turtle", "South Park"). Auto-detected from barcode if available.')
+
+parser.add_argument('-bm', '--benchmark',
+                    action='store_true',
+                    help='Run in benchmark mode (loops continuously until Ctrl+C is pressed)')
+
+parser.add_argument('-d', '--date',
+                    default='',
+                    metavar='DATE',
+                    help='Custom date for upload (format: YYYY-MM-DD). If not provided, uses today\'s date.')
+
+parser.add_argument('-s', '--station',
+                    default='',
+                    metavar='STATION',
+                    help='Station identifier. If not provided, uses STATION environment variable.')
 
 args = parser.parse_args()
 orchestrator=args.orchestrator
@@ -212,10 +270,41 @@ while not isDone:
                 else:
                     AttemptedStows['/cycle_'+str(i)]={"itemFcsku":StowData["itemFcsku"],"binId":StowData["binId"],"binScannableId":StowData["binScannableId"]}
             else:
-                print("cycle_"+str(i)+" does not have a bin ID.")
-        i += 1
-    if cycles >= TrueCycleCount and not os.path.isdir(file_path+podID+temp+str(i+1)):
-        isDone = True
+                print("Invalid cycle count. Using default: 1")
+                TrueCycleCount = 1
+
+        # Build S3 URI and validate
+        s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
+        barcode_s3_uri = s3_base + "cycle_1/dynamic_1/datamanager_triggers_load_data.data.json"
+        
+        logger.info(f"Checking S3 URI: {s3_base}")
+        logger.info(f"S3 URI is valid. Proceeding...")
+        podBarcode = get_json(barcode_s3_uri)
+        
+        if podBarcode is not None:
+            break
+        
+        # S3 validation failed - prompt for retry
+        logger.error(f"Failed to read from S3: {barcode_s3_uri}")
+        print("\nS3 URI validation failed. Please check your inputs.")
+        retry = input("Retry with different inputs? (y/n): ").strip().lower()
+        if retry != 'y':
+            if benchmark_mode:
+                return False
+            exit(1)
+        
+        # Reset for retry
+        orchestrator = ""
+        podID = ""
+        TrueCycleCount = 0
+        stationId = ""
+        custom_date = ""
+
+    # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
+    if podBarcode in POD_BARCODE_DATABASE:
+        PodName = POD_BARCODE_DATABASE[podBarcode]
+    if PodName == "":
+        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
     else:
         print("Cycles missing (",cycles,"/",TrueCycleCount,"), retrying...")
         time.sleep(1)
@@ -382,13 +471,197 @@ def upload_to_cleans_collection():
         print("\n! PyMongo not installed. Install with: pip install pymongo")
         return False
     except Exception as e:
-        print(f"\n! Error uploading to MongoDB cleans collection: {e}")
-        return False
+        generation_success = False
+        current_state = WorkflowState.GENERATION_FAILED
+        logger.error(f"State: {current_state.value} - {e}")
+        raise
 
-# Execute the upload function
+    if TrueCycleCount > cycles:
+        print("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount - cycles), "cycles unaccounted for.")
+
+    # Upload to database
+    def upload_to_cleans_collection():
+        from datetime import datetime
+        global current_state, upload_success
+
+        if not generation_success:
+            logger.error("Cannot proceed to UPLOADING_DATABASE: GENERATION_COMPLETE not achieved")
+            return False
+
+        current_state = WorkflowState.UPLOADING_DATABASE
+        logger.info(f"State: {current_state.value}")
+
+        # Prepare cleaning data document FIRST (before any DB connection)
+        try:
+            # Parse pod barcode information
+            if podBarcode and " " in podBarcode and "-" in podBarcode:
+                try:
+                    after_space = podBarcode.split(" ")[1]
+                    before_space = podBarcode.split(" ")[0]
+                    podFace = after_space.split("-")[1]
+                    podType = after_space.split("-")[0]
+                except (IndexError, AttributeError):
+                    podType = "Unknown"
+                    podFace = "Unknown"
+                    before_space = podBarcode
+            else:
+                podType = "Unknown"
+                podFace = "Unknown"
+                before_space = podBarcode
+
+            orchestratorID = orchestrator + "/" + podID
+            uploadedAT = datetime.now().strftime("%Y-%m-%d")
+
+            # Get system environment variables
+            user = os.environ.get('USER')
+            station = stationId
+
+            # Build the complete document
+            clean_document = {
+                "_id": str(uuid.uuid4()),
+                "podBarcode": before_space,
+                "podName": PodName,
+                "orchestratorId": orchestratorID,
+                "podType": podType,
+                "podFace": podFace,
+                "stowedItems": [],
+                "attemptedStows": [],
+                "uploadAt": uploadedAT,
+                "status": "incomplete",
+                "totalItems": i_count,
+                "user": user,
+                "station": station
+            }
+
+            # Add stowed items data
+            for item_data in itemss:
+                clean_document["stowedItems"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "stowed"
+                })
+
+            # Add attempted stows data
+            for item_data in bitemss:
+                clean_document["attemptedStows"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "attempted"
+                })
+        except Exception as e:
+            upload_success = False
+            logger.error(f"Error preparing document: {e}")
+            return False
+
+        # NOW attempt database connection and upload
+        try:
+            from pymongo import MongoClient
+
+            logger.info("  Connecting to MongoDB...")
+
+            # Set MONGODB_URI environment variable before running this script
+            connection_string = os.environ.get('MONGODB_URI')
+            if not connection_string:
+                upload_success = False
+                logger.error("MONGODB_URI environment variable not set")
+                print("  Contact @ftnguyen to set it up")
+                return False
+
+            # Connect to MongoDB
+            client = MongoClient(connection_string)
+
+            # Select database and collection
+            db = client['podManagement']
+            cleans_collection = db['cleans']
+
+            # Insert document into cleans collection
+            result = cleans_collection.insert_one(clean_document)
+
+            logger.info(f"Pick list uploaded successfully")
+            logger.info(f"Document ID: {result.inserted_id}")
+            # Close connection
+            client.close()
+            logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Pod: {PodName} ({podBarcode})")
+            logger.info(f"Orchestrator: {orchestratorID}")
+            if benchmark_mode:
+                if podFace == "A":
+                    logger.info(f"Awaiting {PodName} C face")
+            upload_success = True
+            current_state = WorkflowState.UPLOAD_COMPLETE
+            logger.info(f"State: {current_state.value}")
+            return True
+
+        except ImportError:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - PyMongo not installed")
+            logger.error(f"Document was prepared but not uploaded")
+            return False
+        except Exception as e:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
+            logger.error(f"Document was prepared but upload failed")
+            return False
+
+    while True:
+        result = upload_to_cleans_collection()
+        if result:
+            return True
+        input("\nPress Enter to retry or Ctrl+C to cancel...")
+        print("Retrying...")
+def credentials_check():
+    global result, check
+    check = subprocess.run("aws sts get-caller-identity", shell=True, capture_output=True, text=True)
+    result = check.returncode
+    return result
+def exit_funct():
+    logger.info('Exiting...')
+    exit(1)
+# Execute the main function with benchmark mode support
 if __name__ == "__main__":
-    # Call the upload function after all data processing is complete
-    upload_success = upload_to_cleans_collection()
+    # Parse command line arguments first
+    orchestrator = args.orchestrator
+    PodName = args.podname
+    benchmark_mode = args.benchmark
+    custom_date = args.date
+    stationId = args.station
+    
+    # Check AWS credentials
+    if credentials_check() != 0:
+        print("\nAWS credentials invalid. Launching refresh-adroit-credentials...\n")
+        subprocess.run("zsh -i -c refresh-adroit-credentials", shell=True)
+        if credentials_check() != 0:
+            print("\nCredentials still invalid. Exiting.\n")
+            exit(1)
+
+    if benchmark_mode:
+        print("\n*** BENCHMARK MODE ENABLED ***")
+        print("Script will loop continuously. Press Ctrl+C to cancel.\n")
+        run_count = 0
+        try:
+            while True:
+                run_count += 1
+                print(f"\n{'='*60}")
+                print(f"Benchmark Run #{run_count}")
+                print(f"{'='*60}\n")
+
+                result = run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+                if not result:
+                    break
+                
+                # Reset for next iteration to prompt for new inputs
+                orchestrator = args.orchestrator
+                PodName = args.podname
+                custom_date = args.date
+                stationId = args.station
+        except KeyboardInterrupt:
+            exit_funct()
+    else:
+        # Normal single execution
+
+        run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
 
 
 
