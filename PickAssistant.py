@@ -644,81 +644,88 @@ def grub_menu():
                         pods.append(pod)
         return pods
     
-    # Main menu
-    dates = get_latest_dates()
-    if not dates:
-        print("No dates found")
-        return
-    
-    selected_idx = 0
     while True:
-        display_menu(dates, selected_idx, "Select Date")
-        key = get_key()
+        # Date menu
+        dates = get_latest_dates()
+        if not dates:
+            print("No dates found. Retrying...")
+            continue
         
-        if key == 'CTRL_C':
-            exit_funct()
-        elif key == 'UP':
-            selected_idx = (selected_idx - 1) % len(dates)
-        elif key == 'DOWN':
-            selected_idx = (selected_idx + 1) % len(dates)
-        elif key == 'ENTER':
-            selected_date = dates[selected_idx]
-            break
-        elif key == 'CTRL_B':
-            return None
-    
-    # Orchestrator menu
-    orchestrators = get_orchestrators(selected_date)
-    if not orchestrators:
-        print("No orchestrators found")
-        return
-    
-    selected_idx = 0
-    while True:
-        display_menu(orchestrators, selected_idx, f"Select Orchestrator ({selected_date})")
-        key = get_key()
-        
-        if key == 'CTRL_C':
-            exit_funct()
-        elif key == 'UP':
-            selected_idx = (selected_idx - 1) % len(orchestrators)
-        elif key == 'DOWN':
-            selected_idx = (selected_idx + 1) % len(orchestrators)
-        elif key == 'ENTER':
-            selected_orchestrator = orchestrators[selected_idx]
-            break
-        elif key == 'CTRL_B':
-            return None
-    
-    # Pod selection
-    pods = get_pods(selected_date, selected_orchestrator)
-    if not pods:
-        print("No pods found")
-        return
-    
-    if len(pods) == 1:
-        selected_pod = pods[0]
-        print(f"\nAuto-selected: {selected_pod}")
-    else:
         selected_idx = 0
         while True:
-            display_menu(pods, selected_idx, f"Select Pod ({selected_orchestrator})")
+            display_menu(dates, selected_idx, "Select Date")
             key = get_key()
             
             if key == 'CTRL_C':
                 exit_funct()
             elif key == 'UP':
-                selected_idx = (selected_idx - 1) % len(pods)
+                selected_idx = (selected_idx - 1) % len(dates)
             elif key == 'DOWN':
-                selected_idx = (selected_idx + 1) % len(pods)
+                selected_idx = (selected_idx + 1) % len(dates)
             elif key == 'ENTER':
-                selected_pod = pods[selected_idx]
-                print(f"\nSelected: {selected_pod}")
+                selected_date = dates[selected_idx]
                 break
             elif key == 'CTRL_B':
                 return None
-    
-    return (selected_date, selected_orchestrator, selected_pod)
+        
+        # Orchestrator menu
+        orchestrators = get_orchestrators(selected_date)
+        if not orchestrators:
+            print("No orchestrators found. Going back to date selection...")
+            continue
+        
+        selected_idx = 0
+        while True:
+            display_menu(orchestrators, selected_idx, f"Select Orchestrator ({selected_date})")
+            key = get_key()
+            
+            if key == 'CTRL_C':
+                exit_funct()
+            elif key == 'UP':
+                selected_idx = (selected_idx - 1) % len(orchestrators)
+            elif key == 'DOWN':
+                selected_idx = (selected_idx + 1) % len(orchestrators)
+            elif key == 'ENTER':
+                selected_orchestrator = orchestrators[selected_idx]
+                break
+            elif key == 'CTRL_B':
+                break
+        
+        if key == 'CTRL_B':
+            continue
+        
+        # Pod selection
+        pods = get_pods(selected_date, selected_orchestrator)
+        if not pods:
+            print("No pods found. Going back to orchestrator selection...")
+            continue
+        
+        if len(pods) == 1:
+            selected_pod = "pod_1"
+            print(f"\nAuto-selected: {selected_pod}")
+        else:
+            selected_idx = 0
+            while True:
+                display_menu(pods, selected_idx, f"Select Pod ({selected_orchestrator})")
+                key = get_key()
+                
+                if key == 'CTRL_C':
+                    exit_funct()
+                elif key == 'UP':
+                    selected_idx = (selected_idx - 1) % len(pods)
+                elif key == 'DOWN':
+                    selected_idx = (selected_idx + 1) % len(pods)
+                elif key == 'ENTER':
+                    selected_pod = pods[selected_idx]
+                    print(f"\nSelected: {selected_pod}")
+                    break
+                elif key == 'CTRL_B':
+                    break
+            
+            if key == 'CTRL_B':
+                continue
+        
+        return (selected_date, selected_orchestrator, selected_pod)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
     # Parse command line arguments first
