@@ -200,7 +200,7 @@ args = parser.parse_args()
 # Station validation list
 STATION_LIST = ['0206', '0207', '0208', '0303', '0306', '0307', '0308']
 
-def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, TrueCycleCount, benchmark_mode=False):
+def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, benchmark_mode=False):
     """Run pick assistant with pre-selected parameters from grub menu"""
     from datetime import datetime, timezone
     
@@ -237,16 +237,6 @@ def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, 
         logger.info(f"{PodName} was found via the barcode")
     else:
         PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
-
-    # Prompt for cycle count
-    inputt = input("Enter total cycle count (default: 1): ").strip()
-    if inputt.isdigit():
-        TrueCycleCount = int(inputt)
-    elif inputt == "":
-        TrueCycleCount = 1
-    else:
-        print("Invalid cycle count. Using default: 1")
-        TrueCycleCount = 1
 
     isDone = False
     while not isDone:
@@ -930,7 +920,7 @@ if __name__ == "__main__":
             selected_station, selected_date, selected_orchestrator, selected_pod = result
             logger.info(f"Selected: Station={selected_station}, Date={selected_date}, Orchestrator={selected_orchestrator}, Pod={selected_pod}")
             # Run main process with collected variables
-            run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, TrueCycleCount=1)
+            run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, benchmark_mode)
         exit(0)
 
     if benchmark_mode:
