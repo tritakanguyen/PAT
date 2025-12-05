@@ -200,12 +200,12 @@ args = parser.parse_args()
 # Station validation list
 STATION_LIST = ['0206', '0207', '0208', '0303', '0306', '0307', '0308']
 
-def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, benchmark_mode=False):
+def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, TrueCycleCount, benchmark_mode=False):
     """Run pick assistant with pre-selected parameters from grub menu"""
     from datetime import datetime, timezone
     
     PodName = ""
-    TrueCycleCount = 0
+    TrueCycleCount = 1
 
     # Build S3 URI and validate
     s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
@@ -930,7 +930,7 @@ if __name__ == "__main__":
             selected_station, selected_date, selected_orchestrator, selected_pod = result
             logger.info(f"Selected: Station={selected_station}, Date={selected_date}, Orchestrator={selected_orchestrator}, Pod={selected_pod}")
             # Run main process with collected variables
-            run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, benchmark_mode)
+            run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, TrueCycleCount=1)
         exit(0)
 
     if benchmark_mode:
