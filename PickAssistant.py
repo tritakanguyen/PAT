@@ -516,130 +516,126 @@ def run_pick_assistant(benchmark_mode=False):
 
     # Upload to database
     def upload_to_cleans_collection():
-        # from datetime import datetime
-        # global current_state, upload_success
+        from datetime import datetime
+        global current_state, upload_success
 
-        # if not generation_success:
-        #     logger.error("Cannot proceed to UPLOADING_DATABASE: GENERATION_COMPLETE not achieved")
-        #     return False
+        if not generation_success:
+            logger.error("Cannot proceed to UPLOADING_DATABASE: GENERATION_COMPLETE not achieved")
+            return False
 
-        # current_state = WorkflowState.UPLOADING_DATABASE
-        # logger.info(f"State: {current_state.value}")
+        current_state = WorkflowState.UPLOADING_DATABASE
+        logger.info(f"State: {current_state.value}")
 
-        # # Prepare cleaning data document FIRST (before any DB connection)
-        # try:
-        #     orchestratorID = orchestrator
-        #     uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # Prepare cleaning data document FIRST (before any DB connection)
+        try:
+            orchestratorID = orchestrator
+            uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        #     # Get system environment variables
-        #     user = os.environ.get('USER')
-        #     station = stationId
+            # Get system environment variables
+            user = os.environ.get('USER')
+            station = stationId
 
-        #     # Build the complete document
-        #     clean_document = {
-        #         "_id": str(uuid.uuid4()),
-        #         "podBarcode": podId,
-        #         "podName": PodName,
-        #         "orchestratorId": orchestratorID,
-        #         "podType": podType,
-        #         "podFace": podFace,
-        #         "stowedItems": [],
-        #         "attemptedStows": [],
-        #         "uploadAt": uploadedAT,
-        #         "status": "incomplete",
-        #         "totalItems": i_count,
-        #         "user": user,
-        #         "station": station,
-        #         "isBenchmark": benchmark_mode
-        #     }
+            # Build the complete document
+            clean_document = {
+                "_id": str(uuid.uuid4()),
+                "podBarcode": podId,
+                "podName": PodName,
+                "orchestratorId": orchestratorID,
+                "podType": podType,
+                "podFace": podFace,
+                "stowedItems": [],
+                "attemptedStows": [],
+                "uploadAt": uploadedAT,
+                "status": "incomplete",
+                "totalItems": i_count,
+                "user": user,
+                "station": station,
+                "isBenchmark": benchmark_mode
+            }
 
-        #     # Add stowed items data
-        #     for item_data in itemss:
-        #         clean_document["stowedItems"].append({
-        #             "itemFcsku": item_data[1],
-        #             "binId": item_data[0],
-        #             "status": "stowed"
-        #         })
+            # Add stowed items data
+            for item_data in itemss:
+                clean_document["stowedItems"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "stowed"
+                })
 
-        #     # Add attempted stows data
-        #     for item_data in bitemss:
-        #         clean_document["attemptedStows"].append({
-        #             "itemFcsku": item_data[1],
-        #             "binId": item_data[0],
-        #             "status": "attempted"
-        #         })
-        # except Exception as e:
-        #     upload_success = False
-        #     logger.error(f"Error preparing document: {e}")
-        #     return False
+            # Add attempted stows data
+            for item_data in bitemss:
+                clean_document["attemptedStows"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "attempted"
+                })
+        except Exception as e:
+            upload_success = False
+            logger.error(f"Error preparing document: {e}")
+            return False
 
-        # # NOW attempt database connection and upload
-        # try:
-        #     from pymongo import MongoClient
+        # NOW attempt database connection and upload
+        try:
+            from pymongo import MongoClient
 
-        #     logger.info(f"Connecting to MongoDB...")
+            logger.info(f"Connecting to MongoDB...")
 
-        #     # Set MONGODB_URI environment variable before running this script
-        #     connection_string = os.environ.get('MONGODB_URI')
-        #     if not connection_string:
-        #         upload_success = False
-        #         logger.error("MONGODB_URI environment variable not set")
-        #         print("  Contact @ftnguyen to set it up")
-        #         return False
+            # Set MONGODB_URI environment variable before running this script
+            connection_string = os.environ.get('MONGODB_URI')
+            if not connection_string:
+                upload_success = False
+                logger.error("MONGODB_URI environment variable not set")
+                print("  Contact @ftnguyen to set it up")
+                return False
 
-        #     # Connect to MongoDB
-        #     client = MongoClient(connection_string)
+            # Connect to MongoDB
+            client = MongoClient(connection_string)
 
-        #     # Select database and collection
-        #     db = client['podManagement']
-        #     cleans_collection = db['cleans']
+            # Select database and collection
+            db = client['podManagement']
+            cleans_collection = db['cleans']
 
-        #     # Insert document into cleans collection
-        #     result = cleans_collection.insert_one(clean_document)
+            # Insert document into cleans collection
+            result = cleans_collection.insert_one(clean_document)
 
-        #     logger.info(f"Pick list uploaded successfully")
-        #     logger.info(f"Document ID: {result.inserted_id}")
-        #     # Close connection
-        #     client.close()
-        #     logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        #     logger.info(f"Pod: {PodName} ({podBarcode})")
-        #     logger.info(f"Orchestrator: {orchestratorID}")
-        #     if benchmark_mode:
-        #         if podFace == "A":
-        #             logger.info(f"Awaiting {PodName} C face")
-        #     upload_success = True
-        #     current_state = WorkflowState.UPLOAD_COMPLETE
-        #     logger.info(f"State: {current_state.value}")
-        #     return True
+            logger.info(f"Pick list uploaded successfully")
+            logger.info(f"Document ID: {result.inserted_id}")
+            # Close connection
+            client.close()
+            logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Pod: {PodName} ({podBarcode})")
+            logger.info(f"Orchestrator: {orchestratorID}")
+            if benchmark_mode:
+                if podFace == "A":
+                    logger.info(f"Awaiting {PodName} C face")
+            upload_success = True
+            current_state = WorkflowState.UPLOAD_COMPLETE
+            logger.info(f"State: {current_state.value}")
+            return True
 
-        # except ImportError:
-        #     upload_success = False
-        #     current_state = WorkflowState.UPLOAD_FAILED
-        #     logger.error(f"State: {current_state.value} - PyMongo not installed")
-        #     logger.error(f"Document was prepared but not uploaded")
-        #     return False
-        # except Exception as e:
-        #     upload_success = False
-        #     current_state = WorkflowState.UPLOAD_FAILED
-        #     logger.error(f"State: {current_state.value} - {e}")
-        #     logger.error(f"Document was prepared but upload failed")
-        #     return False
-        logger.info("MongoDB upload temporarily disabled for testing")
-        return True
+        except ImportError:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - PyMongo not installed")
+            logger.error(f"Document was prepared but not uploaded")
+            return False
+        except Exception as e:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
+            logger.error(f"Document was prepared but upload failed")
+            return False
 
-    # while True:
-    #     result = upload_to_cleans_collection()
-    #     if result:
-    #         return True
-    #     input("\nPress Enter to retry or Ctrl+C to cancel...")
-    #     print("Retrying...")
-    upload_to_cleans_collection()
-    return True
-# def credentials_check():
-#     global result, check
-#     check = subprocess.run("aws sts get-caller-identity", shell=True, capture_output=True, text=True)
-#     result = check.returncode
-#     return result
+    while True:
+        result = upload_to_cleans_collection()
+        if result:
+            return True
+        input("\nPress Enter to retry or Ctrl+C to cancel...")
+        print("Retrying...")
+def credentials_check():
+    global result, check
+    check = subprocess.run("aws sts get-caller-identity", shell=True, capture_output=True, text=True)
+    result = check.returncode
+    return result
 def exit_funct():
     logger.info('Exiting...')
     exit(1)
@@ -892,13 +888,12 @@ if __name__ == "__main__":
     all_mode = args.all
     
     # Check AWS credentials
-    # if credentials_check() != 0:
-    #     print("\nAWS credentials invalid. Launching refresh-adroit-credentials...\n")
-    #     subprocess.run("zsh -i -c refresh-adroit-credentials", shell=True)
-    #     if credentials_check() != 0:
-    #         print("\nCredentials still invalid. Exiting.\n")
-    #         exit(1)
-    logger.info("Credential check temporarily disabled for testing")
+    if credentials_check() != 0:
+        print("\nAWS credentials invalid. Launching refresh-adroit-credentials...\n")
+        subprocess.run("zsh -i -c refresh-adroit-credentials", shell=True)
+        if credentials_check() != 0:
+            print("\nCredentials still invalid. Exiting.\n")
+            exit(1)
     
     # Launch grub menu if -a/--all flag is set
     if all_mode:
