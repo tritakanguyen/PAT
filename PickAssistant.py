@@ -580,10 +580,31 @@ def grub_menu():
         print("\n" + "=" * 50)
         print("Controls: ↑/↓ or j/k to navigate | Enter to select | Ctrl+B to go back | Ctrl+C to cancel")
     
-    def get_latest_dates():
-        """Get latest 5 dates from S3"""
+    def get_stations():
+        """Get all stations from S3"""
         result = subprocess.run(
-            "aws s3 ls s3://stow-carbon-copy/Atlas/ | tail -5",
+            "aws s3 ls s3://stow-carbon-copy/Atlas/",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error("Failed to list S3 stations")
+            return []
+        
+        stations = []
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split()
+                if len(parts) >= 2:
+                    station = parts[-1].rstrip('/')
+                    stations.append(station)
+        return stations
+    
+    def get_latest_dates(station):
+        """Get latest 5 dates from selected station"""
+        result = subprocess.run(
+            f"aws s3 ls s3://stow-carbon-copy/Atlas/{station}/ | tail -5",
             shell=True,
             capture_output=True,
             text=True
@@ -601,10 +622,10 @@ def grub_menu():
                     dates.append(date)
         return dates
     
-    def get_orchestrators(date):
-        """Get orchestrators for selected date"""
+    def get_orchestrators(station, date):
+        """Get orchestrators for selected station and date"""
         result = subprocess.run(
-            f"aws s3 ls s3://stow-carbon-copy/Atlas/{date}/",
+            f"aws s3 ls s3://stow-carbon-copy/Atlas/{station}/{date}/",
             shell=True,
             capture_output=True,
             text=True
@@ -622,10 +643,10 @@ def grub_menu():
                     orchestrators.append(orchestrator)
         return orchestrators
     
-    def get_pods(date, orchestrator):
+    def get_pods(station, date, orchestrator):
         """Get pods for selected orchestrator"""
         result = subprocess.run(
-            f"aws s3 ls s3://stow-carbon-copy/Atlas/{date}/{orchestrator}/",
+            f"aws s3 ls s3://stow-carbon-copy/Atlas/{station}/{date}/{orchestrator}/",
             shell=True,
             capture_output=True,
             text=True
@@ -645,15 +666,38 @@ def grub_menu():
         return pods
     
     while True:
-        # Date menu
-        dates = get_latest_dates()
-        if not dates:
-            print("No dates found. Retrying...")
+        # Station menu
+        stations = get_stations()
+        if not stations:
+            print("No stations found. Retrying...")
             continue
         
         selected_idx = 0
         while True:
-            display_menu(dates, selected_idx, "Select Date")
+            display_menu(stations, selected_idx, "Select Station")
+            key = get_key()
+            
+            if key == 'CTRL_C':
+                exit_funct()
+            elif key == 'UP':
+                selected_idx = (selected_idx - 1) % len(stations)
+            elif key == 'DOWN':
+                selected_idx = (selected_idx + 1) % len(stations)
+            elif key == 'ENTER':
+                selected_station = stations[selected_idx]
+                break
+            elif key == 'CTRL_B':
+                return None
+        
+        # Date menu
+        dates = get_latest_dates(selected_station)
+        if not dates:
+            print("No dates found. Going back to station selection...")
+            continue
+        
+        selected_idx = 0
+        while True:
+            display_menu(dates, selected_idx, f"Select Date ({selected_station})")
             key = get_key()
             
             if key == 'CTRL_C':
@@ -666,10 +710,13 @@ def grub_menu():
                 selected_date = dates[selected_idx]
                 break
             elif key == 'CTRL_B':
-                return None
+                break
+        
+        if key == 'CTRL_B':
+            continue
         
         # Orchestrator menu
-        orchestrators = get_orchestrators(selected_date)
+        orchestrators = get_orchestrators(selected_station, selected_date)
         if not orchestrators:
             print("No orchestrators found. Going back to date selection...")
             continue
@@ -695,7 +742,7 @@ def grub_menu():
             continue
         
         # Pod selection
-        pods = get_pods(selected_date, selected_orchestrator)
+        pods = get_pods(selected_station, selected_date, selected_orchestrator)
         if not pods:
             print("No pods found. Going back to orchestrator selection...")
             continue
@@ -725,7 +772,7 @@ def grub_menu():
             if key == 'CTRL_B':
                 continue
         
-        return (selected_date, selected_orchestrator, selected_pod)
+        return (selected_station, selected_date, selected_orchestrator, selected_pod)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
     # Parse command line arguments first
