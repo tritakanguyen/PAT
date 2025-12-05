@@ -12,6 +12,7 @@ Authors:
     - mathar (Matt Harrison)
 
 Version History:
+    v2.3: Add grub menu allow uaer select orchestrator id
     v2.2: Bug fix for out synced s3 timezone issue
     v2.1: Minor refactor for migrate to read from s3 bucket
     v2.0: Major refactor for improved error handling, logging, and integration to webapp.
@@ -26,14 +27,14 @@ Version History:
     v1.8: Added better comments. More accurate cycle count. Tidied up the code.
 
 Usage:
-    # Basic usage with orchestrator ID
-    python PickAssistant.py -o orchestrator_20251007_123456/pod_1/cycle_50
+    # Basic usage
+    python3 picklist.py
 
-    # Specify individual parameters
-    python PickAssistant.py -o orchestrator_20251007_123456 -p pod_1 -c 50
+    # Start with GRUB menu flag -a or --all
+    python3 picklist.py -a
 
     # Run in benchmark mode (continuous loop)
-    python PickAssistant.py -bm -o orchestrator_20251007_123456 -p pod_1 -c 50
+    python3 picklist.py -bm
 
 Environment Variables Required:
     MONGODB_URI: MongoDB connection string for database upload
@@ -170,17 +171,15 @@ parser = argparse.ArgumentParser(
     description='Pick Assistant Tool - Analyzes pod stow data from orchestrator archives',
     epilog='''
 Examples:
-  # Basic usage with orchestrator ID
-  python PickAssistant.py -o orchestrator_20251007_123456/pod_1/cycle_50
+  # Basic usage direct run
+  python3 picklist.py 
 
-  # Specify individual parameters
-  python PickAssistant.py -o orchestrator_20251007_123456 -p pod_1 -c 50
+  # Start with GRUB menu
+  python3 picklist.py -a
+  python3 picklist.py --all
 
   # Run in benchmark mode (continuous loop)
-  python PickAssistant.py -bm -o orchestrator_20251007_123456 -p pod_1 -c 50
-
-  # With custom pod name
-  python PickAssistant.py -o orchestrator_20251007_123456 -n "Ninja Turtle" -c 50
+  python picklist.py -bm
 
 For more information, contact: djoneben, grsjoshu, or ftnguyen
     ''',
@@ -332,7 +331,7 @@ def run_pick_assistant(benchmark_mode=False):
     orchestrator = ""
     PodName = ""
     podID = ""
-    TrueCycleCount = 0
+    TrueCycleCount = 1
     custom_date = ''
     stationId = ''
 
@@ -384,17 +383,6 @@ def run_pick_assistant(benchmark_mode=False):
             else:
                 podID = "pod_1"
 
-        # Prompt for cycle count if not parsed
-        if TrueCycleCount == 0:
-            inputt = input("Enter total cycle count (default: 1): ").strip()
-            if inputt.isdigit():
-                TrueCycleCount = int(inputt)
-            elif inputt == "":
-                TrueCycleCount = 1
-            else:
-                print("Invalid cycle count. Using default: 1")
-                TrueCycleCount = 1
-
         # Build S3 URI and validate
         s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
         pod_id_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_id.data.json"
@@ -428,17 +416,16 @@ def run_pick_assistant(benchmark_mode=False):
         # Reset for retry
         orchestrator = ""
         podID = ""
-        TrueCycleCount = 0
+        TrueCycleCount = 1
         stationId = ""
         custom_date = ""
 
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
     if podBarcode in POD_BARCODE_DATABASE:
         PodName = POD_BARCODE_DATABASE[podBarcode]
-    if PodName == "":
-        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
-    else:
         logger.info(f"{PodName} was found via the barcode")
+    else:
+        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
 
     isDone = False
     while not isDone:
