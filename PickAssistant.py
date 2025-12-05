@@ -320,9 +320,106 @@ def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, 
     if TrueCycleCount > cycles:
         print("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount - cycles), "cycles unaccounted for.")
 
-    logger.info("MongoDB upload temporarily disabled for testing")
-    logger.info(f"Clean document ready: {i_count} stowed items, {len(bitemss)} attempted stows")
-    return True
+    # Upload to database
+    def upload_to_cleans_collection():
+        from datetime import datetime
+        global current_state, upload_success
+
+        if not generation_success:
+            logger.error("Cannot proceed to UPLOADING_DATABASE: GENERATION_COMPLETE not achieved")
+            return False
+
+        current_state = WorkflowState.UPLOADING_DATABASE
+        logger.info(f"State: {current_state.value}")
+
+        try:
+            orchestratorID = orchestrator
+            uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M")
+            user = os.environ.get('USER')
+            station = stationId
+
+            clean_document = {
+                "_id": str(uuid.uuid4()),
+                "podBarcode": podId,
+                "podName": PodName,
+                "orchestratorId": orchestratorID,
+                "podType": podType,
+                "podFace": podFace,
+                "stowedItems": [],
+                "attemptedStows": [],
+                "uploadAt": uploadedAT,
+                "status": "incomplete",
+                "totalItems": i_count,
+                "user": user,
+                "station": station,
+                "isBenchmark": benchmark_mode
+            }
+
+            for item_data in itemss:
+                clean_document["stowedItems"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "stowed"
+                })
+
+            for item_data in bitemss:
+                clean_document["attemptedStows"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "attempted"
+                })
+        except Exception as e:
+            upload_success = False
+            logger.error(f"Error preparing document: {e}")
+            return False
+
+        try:
+            from pymongo import MongoClient
+
+            logger.info(f"Connecting to MongoDB...")
+            connection_string = os.environ.get('MONGODB_URI')
+            if not connection_string:
+                upload_success = False
+                logger.error("MONGODB_URI environment variable not set")
+                print("  Contact @ftnguyen to set it up")
+                return False
+
+            client = MongoClient(connection_string)
+            db = client['podManagement']
+            cleans_collection = db['cleans']
+            result = cleans_collection.insert_one(clean_document)
+
+            logger.info(f"Pick list uploaded successfully")
+            logger.info(f"Document ID: {result.inserted_id}")
+            client.close()
+            logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Pod: {PodName} ({podBarcode})")
+            logger.info(f"Orchestrator: {orchestratorID}")
+            if benchmark_mode:
+                if podFace == "A":
+                    logger.info(f"Awaiting {PodName} C face")
+            upload_success = True
+            current_state = WorkflowState.UPLOAD_COMPLETE
+            logger.info(f"State: {current_state.value}")
+            return True
+
+        except ImportError:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - PyMongo not installed")
+            return False
+        except Exception as e:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
+            return False
+
+    while True:
+        result = upload_to_cleans_collection()
+        if result:
+            return True
+        input("\nPress Enter to retry or Ctrl+C to cancel...")
+        print("Retrying...")
 
 # Wrap the main logic in a loop if benchmark mode is enabled
 def run_pick_assistant(benchmark_mode=False):
