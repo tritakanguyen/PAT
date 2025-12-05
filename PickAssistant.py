@@ -200,6 +200,141 @@ args = parser.parse_args()
 # Station validation list
 STATION_LIST = ['0206', '0207', '0208', '0303', '0306', '0307', '0308']
 
+def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, benchmark_mode=False):
+    """Run pick assistant with pre-selected parameters from grub menu"""
+    from datetime import datetime, timezone
+    
+    PodName = ""
+    TrueCycleCount = 0
+
+    # Build S3 URI and validate
+    s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
+    pod_id_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_id.data.json"
+    pod_type_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_fba_family.data.json"
+    pod_face_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_face.data.json"
+    logger.info(f"Checking S3 URI: {s3_base}")
+    
+    podId = get_json(pod_id_s3_uri)
+    podType = get_json(pod_type_s3_uri)
+    podFace = get_json(pod_face_s3_uri)
+    
+    if podId is None or podType is None or podFace is None:
+        logger.error("Failed to read from S3. Missing files:")
+        if podId is None:
+            logger.error(f"  - {pod_id_s3_uri}")
+        if podType is None:
+            logger.error(f"  - {pod_type_s3_uri}")
+        if podFace is None:
+            logger.error(f"  - {pod_face_s3_uri}")
+        return False
+    
+    podBarcode = podId + " " + podType + "-" + podFace
+    logger.info(f"S3 URI is valid. Proceeding...")
+
+    # Get pod name from barcode database
+    if podBarcode in POD_BARCODE_DATABASE:
+        PodName = POD_BARCODE_DATABASE[podBarcode]
+        logger.info(f"{PodName} was found via the barcode")
+    else:
+        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
+
+    # Prompt for cycle count
+    inputt = input("Enter total cycle count (default: 1): ").strip()
+    if inputt.isdigit():
+        TrueCycleCount = int(inputt)
+    elif inputt == "":
+        TrueCycleCount = 1
+    else:
+        print("Invalid cycle count. Using default: 1")
+        TrueCycleCount = 1
+
+    isDone = False
+    while not isDone:
+        i = 1
+        StowedItems = {}
+        AttemptedStows = {}
+        cycles = 0
+
+        try:
+            while True:
+                annotation_s3_uri = s3_base + f"cycle_{i}/auto_annotation/_olaf_primary_annotation.data.json"
+                stow_location_s3_uri = s3_base + f"cycle_{i}/dynamic_1/match_output.data.json"
+
+                AnnotationData = get_json(annotation_s3_uri)
+                StowData = get_json(stow_location_s3_uri)
+                
+                if AnnotationData is None and StowData is None:
+                    break
+
+                if StowData:
+                    cycles += 1
+                    if StowData.get("binId"):
+                        if AnnotationData and AnnotationData.get("isStowedItemInBin"):
+                            StowedItems['/cycle_' + str(i)] = {
+                                "itemFcsku": StowData.get("itemFcsku"),
+                                "binId": StowData.get("binId"),
+                                "binScannableId": StowData.get("binScannableId")
+                            }
+                        else:
+                            AttemptedStows['/cycle_' + str(i)] = {
+                                "itemFcsku": StowData.get("itemFcsku"),
+                                "binId": StowData.get("binId"),
+                                "binScannableId": StowData.get("binScannableId")
+                            }
+                    else:
+                        logger.info(f"cycle_" + str(i) + " does not have a bin ID.")
+                i += 1
+            
+            if cycles >= TrueCycleCount:
+                isDone = True
+                read_success = True
+                current_state = WorkflowState.READ_COMPLETE
+                logger.info(f"State: {current_state.value}")
+            else:
+                logger.info(f"Cycles missing ({cycles}/{TrueCycleCount}), retrying...")
+                time.sleep(1)
+        except Exception as e:
+            read_success = False
+            current_state = WorkflowState.READ_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
+            raise
+
+    if not read_success:
+        logger.error("Cannot proceed to GENERATING_CONTENT: READ_COMPLETE not achieved")
+        raise RuntimeError("State transition blocked: reading files did not complete successfully")
+
+    current_state = WorkflowState.GENERATING_CONTENT
+    logger.info(f"State: {current_state.value}")
+
+    try:
+        itemss = []
+        for item in StowedItems:
+            itemss.append([StowedItems[item]["binId"], StowedItems[item]["itemFcsku"]])
+        itemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+
+        bitemss = []
+        for item in AttemptedStows:
+            bitemss.append([AttemptedStows[item]["binId"], AttemptedStows[item]["itemFcsku"]])
+        bitemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+
+        i_count = len(itemss)
+
+        generation_success = True
+        current_state = WorkflowState.GENERATION_COMPLETE
+        logger.info(f"State: {current_state.value}")
+    except Exception as e:
+        generation_success = False
+        current_state = WorkflowState.GENERATION_FAILED
+        logger.error(f"State: {current_state.value} - {e}")
+        raise
+
+    if TrueCycleCount > cycles:
+        print("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount - cycles), "cycles unaccounted for.")
+
+    logger.info("MongoDB upload temporarily disabled for testing")
+    logger.info(f"Clean document ready: {i_count} stowed items, {len(bitemss)} attempted stows")
+    return True
+
 # Wrap the main logic in a loop if benchmark mode is enabled
 def run_pick_assistant(benchmark_mode=False):
     from datetime import datetime, timezone
@@ -748,7 +883,7 @@ def grub_menu():
             continue
         
         if len(pods) == 1:
-            selected_pod = "pod_1"
+            selected_pod = pods[0]
             print(f"\nAuto-selected: {selected_pod}")
         else:
             selected_idx = 0
@@ -790,7 +925,12 @@ if __name__ == "__main__":
     
     # Launch grub menu if -a/--all flag is set
     if all_mode:
-        grub_menu()
+        result = grub_menu()
+        if result:
+            selected_station, selected_date, selected_orchestrator, selected_pod = result
+            logger.info(f"Selected: Station={selected_station}, Date={selected_date}, Orchestrator={selected_orchestrator}, Pod={selected_pod}")
+            # Run main process with collected variables
+            run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, benchmark_mode)
         exit(0)
 
     if benchmark_mode:
