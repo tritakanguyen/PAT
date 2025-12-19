@@ -63,7 +63,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print("PickAssistant v2.2")
+print("PickAssistant v2.3")
 
 # Workflow State Management
 class WorkflowState(Enum):
@@ -1037,3 +1037,4 @@ if __name__ == "__main__":
     else:
         # Normal single execution
         run_pick_assistant(benchmark_mode)
+
