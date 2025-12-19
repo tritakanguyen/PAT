@@ -63,7 +63,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print("PickAssistant v2.3")
+print("PickAssistant v2.2")
 
 # Workflow State Management
 class WorkflowState(Enum):
@@ -225,7 +225,7 @@ def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, 
             logger.error(f"  - {pod_type_s3_uri}")
         if podFace is None:
             logger.error(f"  - {pod_face_s3_uri}")
-        return False
+        raise FileNotFoundError("Missing S3 files")
     
     podBarcode = podId + " " + podType + "-" + podFace
     logger.info(f"S3 URI is valid. Proceeding...")
@@ -1003,9 +1003,17 @@ if __name__ == "__main__":
             # Run main process with collected variables
             # Run main process with collected variables
             if selected_pod == "all" and all_pods:
+                warnings = []
                 for pod in all_pods:
                     logger.info(f"Processing pod: {pod}")
-                    run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, pod, benchmark_mode)
+                    try:
+                        run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, pod, benchmark_mode)
+                    except Exception as e:
+                        warnings.append(f"[WARN] Failed to get info for {selected_orchestrator}/{pod} due to {e}")
+                        continue
+                # Print all warnings at the end
+                for warning in warnings:
+                    print(warning)
             else:
                 run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, benchmark_mode)
         exit(0)
