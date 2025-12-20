@@ -12,6 +12,7 @@ Authors:
     - mathar (Matt Harrison)
 
 Version History:
+    v2.3: Add grub menu allow uaer select orchestrator id
     v2.2: Bug fix for out synced s3 timezone issue
     v2.1: Minor refactor for migrate to read from s3 bucket
     v2.0: Major refactor for improved error handling, logging, and integration to webapp.
@@ -26,14 +27,14 @@ Version History:
     v1.8: Added better comments. More accurate cycle count. Tidied up the code.
 
 Usage:
-    # Basic usage with orchestrator ID
-    python PickAssistant.py -o orchestrator_20251007_123456/pod_1/cycle_50
+    # Basic usage
+    python3 picklist.py
 
-    # Specify individual parameters
-    python PickAssistant.py -o orchestrator_20251007_123456 -p pod_1 -c 50
+    # Start with GRUB menu flag -a or --all
+    python3 picklist.py -a
 
     # Run in benchmark mode (continuous loop)
-    python PickAssistant.py -bm -o orchestrator_20251007_123456 -p pod_1 -c 50
+    python3 picklist.py -bm
 
 Environment Variables Required:
     MONGODB_URI: MongoDB connection string for database upload
@@ -62,7 +63,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print("PickAssistant v2.2")
+print("PickAssistant v2.3")
 
 # Workflow State Management
 class WorkflowState(Enum):
@@ -170,60 +171,266 @@ parser = argparse.ArgumentParser(
     description='Pick Assistant Tool - Analyzes pod stow data from orchestrator archives',
     epilog='''
 Examples:
-  # Basic usage with orchestrator ID
-  python PickAssistant.py -o orchestrator_20251007_123456/pod_1/cycle_50
+  # Basic usage direct run
+  python3 picklist.py 
 
-  # Specify individual parameters
-  python PickAssistant.py -o orchestrator_20251007_123456 -p pod_1 -c 50
+  # Start with GRUB menu
+  python3 picklist.py -a
+  python3 picklist.py --all
 
   # Run in benchmark mode (continuous loop)
-  python PickAssistant.py -bm -o orchestrator_20251007_123456 -p pod_1 -c 50
-
-  # With custom pod name
-  python PickAssistant.py -o orchestrator_20251007_123456 -n "Ninja Turtle" -c 50
+  python picklist.py -bm
 
 For more information, contact: djoneben, grsjoshu, or ftnguyen
     ''',
     formatter_class=argparse.RawDescriptionHelpFormatter
 )
 
-parser.add_argument('-o', '--orchestrator',
-                    default='',
-                    metavar='ID',
-                    help='Orchestrator ID (can include pod and cycle info, e.g., orchestrator_123/pod_1/cycle_50)')
-
-parser.add_argument('-n', '--podname',
-                    default='',
-                    metavar='NAME',
-                    help='Pod name/identifier (e.g., "Ninja Turtle", "South Park"). Auto-detected from barcode if available.')
-
 parser.add_argument('-bm', '--benchmark',
                     action='store_true',
                     help='Run in benchmark mode (loops continuously until Ctrl+C is pressed)')
 
-parser.add_argument('-d', '--date',
-                    default='',
-                    metavar='DATE',
-                    help='Custom date for upload (format: YYYY-MM-DD). If not provided, uses today\'s date.')
-
-parser.add_argument('-s', '--station',
-                    default='',
-                    metavar='STATION',
-                    help='Station identifier. If not provided, uses STATION environment variable.')
+parser.add_argument('-a', '--all',
+                    action='store_true',
+                    help='Open interactive grub menu')
 
 args = parser.parse_args()
 
 # Station validation list
 STATION_LIST = ['0206', '0207', '0208', '0303', '0306', '0307', '0308']
 
-# Wrap the main logic in a loop if benchmark mode is enabled
-def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, custom_date='', stationId=''):
+def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, benchmark_mode=False):
+    """Run pick assistant with pre-selected parameters from grub menu"""
     from datetime import datetime, timezone
     
-    orchestrator = orchestrator_arg
-    PodName = pod_name_arg
+    PodName = ""
+    TrueCycleCount = 1
+
+    # Build S3 URI and validate
+    s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
+    pod_id_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_id.data.json"
+    pod_type_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_fba_family.data.json"
+    pod_face_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_face.data.json"
+    logger.info(f"Checking S3 URI: {s3_base}")
+    
+    podId = get_json(pod_id_s3_uri)
+    podType = get_json(pod_type_s3_uri)
+    podFace = get_json(pod_face_s3_uri)
+    
+    if podId is None or podType is None or podFace is None:
+        logger.error("Failed to read from S3. Missing files:")
+        if podId is None:
+            logger.error(f"  - {pod_id_s3_uri}")
+        if podType is None:
+            logger.error(f"  - {pod_type_s3_uri}")
+        if podFace is None:
+            logger.error(f"  - {pod_face_s3_uri}")
+        return False
+    
+    podBarcode = podId + " " + podType + "-" + podFace
+    logger.info(f"S3 URI is valid. Proceeding...")
+
+    # Get pod name from barcode database
+    if podBarcode in POD_BARCODE_DATABASE:
+        PodName = POD_BARCODE_DATABASE[podBarcode]
+        logger.info(f"{PodName} was found via the barcode")
+    else:
+        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
+
+    isDone = False
+    while not isDone:
+        i = 1
+        StowedItems = {}
+        AttemptedStows = {}
+        cycles = 0
+
+        try:
+            while True:
+                annotation_s3_uri = s3_base + f"cycle_{i}/auto_annotation/_olaf_primary_annotation.data.json"
+                stow_location_s3_uri = s3_base + f"cycle_{i}/dynamic_1/match_output.data.json"
+
+                AnnotationData = get_json(annotation_s3_uri)
+                StowData = get_json(stow_location_s3_uri)
+                
+                if AnnotationData is None and StowData is None:
+                    break
+
+                if StowData:
+                    cycles += 1
+                    if StowData.get("binId"):
+                        if AnnotationData and AnnotationData.get("isStowedItemInBin"):
+                            StowedItems['/cycle_' + str(i)] = {
+                                "itemFcsku": StowData.get("itemFcsku"),
+                                "binId": StowData.get("binId"),
+                                "binScannableId": StowData.get("binScannableId")
+                            }
+                        else:
+                            AttemptedStows['/cycle_' + str(i)] = {
+                                "itemFcsku": StowData.get("itemFcsku"),
+                                "binId": StowData.get("binId"),
+                                "binScannableId": StowData.get("binScannableId")
+                            }
+                    else:
+                        logger.info(f"cycle_" + str(i) + " does not have a bin ID.")
+                i += 1
+            
+            if cycles >= TrueCycleCount:
+                isDone = True
+                read_success = True
+                current_state = WorkflowState.READ_COMPLETE
+                logger.info(f"State: {current_state.value}")
+            else:
+                logger.info(f"Cycles missing ({cycles}/{TrueCycleCount}), retrying...")
+                time.sleep(1)
+        except Exception as e:
+            read_success = False
+            current_state = WorkflowState.READ_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
+            raise
+
+    if not read_success:
+        logger.error("Cannot proceed to GENERATING_CONTENT: READ_COMPLETE not achieved")
+        raise RuntimeError("State transition blocked: reading files did not complete successfully")
+
+    current_state = WorkflowState.GENERATING_CONTENT
+    logger.info(f"State: {current_state.value}")
+
+    try:
+        itemss = []
+        for item in StowedItems:
+            itemss.append([StowedItems[item]["binId"], StowedItems[item]["itemFcsku"]])
+        itemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+
+        bitemss = []
+        for item in AttemptedStows:
+            bitemss.append([AttemptedStows[item]["binId"], AttemptedStows[item]["itemFcsku"]])
+        bitemss.sort(key=lambda x: x[0][-1] + x[0][-2])
+
+        i_count = len(itemss)
+
+        generation_success = True
+        current_state = WorkflowState.GENERATION_COMPLETE
+        logger.info(f"State: {current_state.value}")
+    except Exception as e:
+        generation_success = False
+        current_state = WorkflowState.GENERATION_FAILED
+        logger.error(f"State: {current_state.value} - {e}")
+        raise
+
+    if TrueCycleCount > cycles:
+        print("\n\n!!! Missing Cycle Data !!!   There are", (TrueCycleCount - cycles), "cycles unaccounted for.")
+
+    # Upload to database
+    def upload_to_cleans_collection():
+        from datetime import datetime
+        global current_state, upload_success
+
+        if not generation_success:
+            logger.error("Cannot proceed to UPLOADING_DATABASE: GENERATION_COMPLETE not achieved")
+            return False
+
+        current_state = WorkflowState.UPLOADING_DATABASE
+        logger.info(f"State: {current_state.value}")
+
+        try:
+            orchestratorID = orchestrator
+            uploadedAT = datetime.now().strftime("%Y-%m-%d %H:%M")
+            user = os.environ.get('USER')
+            station = stationId
+
+            clean_document = {
+                "_id": str(uuid.uuid4()),
+                "podBarcode": podId,
+                "podName": PodName,
+                "orchestratorId": orchestratorID,
+                "podType": podType,
+                "podFace": podFace,
+                "stowedItems": [],
+                "attemptedStows": [],
+                "uploadAt": uploadedAT,
+                "status": "incomplete",
+                "totalItems": i_count,
+                "user": user,
+                "station": station,
+                "isBenchmark": benchmark_mode
+            }
+
+            for item_data in itemss:
+                clean_document["stowedItems"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "stowed"
+                })
+
+            for item_data in bitemss:
+                clean_document["attemptedStows"].append({
+                    "itemFcsku": item_data[1],
+                    "binId": item_data[0],
+                    "status": "attempted"
+                })
+        except Exception as e:
+            upload_success = False
+            logger.error(f"Error preparing document: {e}")
+            return False
+
+        try:
+            from pymongo import MongoClient
+
+            logger.info(f"Connecting to MongoDB...")
+            connection_string = os.environ.get('MONGODB_URI')
+            if not connection_string:
+                upload_success = False
+                logger.error("MONGODB_URI environment variable not set")
+                print("  Contact @ftnguyen to set it up")
+                return False
+
+            client = MongoClient(connection_string)
+            db = client['podManagement']
+            cleans_collection = db['cleans']
+            result = cleans_collection.insert_one(clean_document)
+
+            logger.info(f"Pick list uploaded successfully")
+            logger.info(f"Document ID: {result.inserted_id}")
+            client.close()
+            logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Pod: {PodName} ({podBarcode})")
+            logger.info(f"Orchestrator: {orchestratorID}")
+            if benchmark_mode:
+                if podFace == "A":
+                    logger.info(f"Awaiting {PodName} C face")
+            upload_success = True
+            current_state = WorkflowState.UPLOAD_COMPLETE
+            logger.info(f"State: {current_state.value}")
+            return True
+
+        except ImportError:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - PyMongo not installed")
+            return False
+        except Exception as e:
+            upload_success = False
+            current_state = WorkflowState.UPLOAD_FAILED
+            logger.error(f"State: {current_state.value} - {e}")
+            return False
+
+    while True:
+        result = upload_to_cleans_collection()
+        if result:
+            return True
+        input("\nPress Enter to retry or Ctrl+C to cancel...")
+        print("Retrying...")
+
+# Wrap the main logic in a loop if benchmark mode is enabled
+def run_pick_assistant(benchmark_mode=False):
+    from datetime import datetime, timezone
+    
+    orchestrator = ""
+    PodName = ""
     podID = ""
-    TrueCycleCount = 0
+    TrueCycleCount = 1
+    custom_date = ''
+    stationId = ''
 
     # Main input loop with S3 validation
     while True:
@@ -273,17 +480,6 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
             else:
                 podID = "pod_1"
 
-        # Prompt for cycle count if not parsed
-        if TrueCycleCount == 0:
-            inputt = input("Enter total cycle count (default: 1): ").strip()
-            if inputt.isdigit():
-                TrueCycleCount = int(inputt)
-            elif inputt == "":
-                TrueCycleCount = 1
-            else:
-                print("Invalid cycle count. Using default: 1")
-                TrueCycleCount = 1
-
         # Build S3 URI and validate
         s3_base = f"s3://stow-carbon-copy/Atlas/{stationId}/{custom_date}/{orchestrator}/{podID}/"
         pod_id_s3_uri = s3_base + "cycle_1/dynamic_1/scene_pod_pod_id.data.json"
@@ -317,17 +513,16 @@ def run_pick_assistant(orchestrator_arg, pod_name_arg, benchmark_mode=False, cus
         # Reset for retry
         orchestrator = ""
         podID = ""
-        TrueCycleCount = 0
+        TrueCycleCount = 1
         stationId = ""
         custom_date = ""
 
     # Asks for user to input an alias identifier for the pod barcode, if not found in the barcode database.
     if podBarcode in POD_BARCODE_DATABASE:
         PodName = POD_BARCODE_DATABASE[podBarcode]
-    if PodName == "":
-        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
-    else:
         logger.info(f"{PodName} was found via the barcode")
+    else:
+        PodName = input("Please enter a Pod Identifier like NT or NinjaTurtles: ")
 
     isDone = False
     while not isDone:
@@ -541,14 +736,252 @@ def credentials_check():
 def exit_funct():
     logger.info('Exiting...')
     exit(1)
+
+def grub_menu():
+    """Interactive grub menu with keyboard controls"""
+    import sys
+    import tty
+    import termios
+    
+    def get_key():
+        """Get single keypress"""
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            if ch == '\x03':  # Ctrl+C
+                return 'CTRL_C'
+            elif ch == '\x02':  # Ctrl+B
+                return 'CTRL_B'
+            elif ch == '\r':  # Enter
+                return 'ENTER'
+            elif ch == '\x1b':  # ESC sequence
+                ch2 = sys.stdin.read(1)
+                if ch2 == '[':
+                    ch3 = sys.stdin.read(1)
+                    if ch3 == 'A':  # Up arrow
+                        return 'UP'
+                    elif ch3 == 'B':  # Down arrow
+                        return 'DOWN'
+            elif ch == 'k':
+                return 'UP'
+            elif ch == 'j':
+                return 'DOWN'
+            return ch
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    
+    def display_menu(options, selected_idx, title="Menu"):
+        """Display menu with selected option highlighted"""
+        print("\033[2J\033[H")  # Clear screen
+        print(f"\n{title}")
+        print("=" * 50)
+        for idx, option in enumerate(options):
+            if idx == selected_idx:
+                print(f"  > {option}")
+            else:
+                print(f"    {option}")
+        print("\n" + "=" * 50)
+        print("Controls: ↑/↓ or j/k to navigate | Enter to select | Ctrl+B to go back | Ctrl+C to cancel")
+    
+    def get_stations():
+        """Get all stations from S3"""
+        result = subprocess.run(
+            "aws s3 ls s3://stow-carbon-copy/Atlas/",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error("Failed to list S3 stations")
+            return []
+        
+        stations = []
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split()
+                if len(parts) >= 2:
+                    station = parts[-1].rstrip('/')
+                    stations.append(station)
+        return stations
+    
+    def get_latest_dates(station):
+        """Get latest 5 dates from selected station"""
+        result = subprocess.run(
+            f"aws s3 ls s3://stow-carbon-copy/Atlas/{station}/ | tail -5",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error("Failed to list S3 dates")
+            return []
+        
+        dates = []
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split()
+                if len(parts) >= 2:
+                    date = parts[-1].rstrip('/')
+                    dates.append(date)
+        return dates
+    
+    def get_orchestrators(station, date):
+        """Get orchestrators for selected station and date"""
+        result = subprocess.run(
+            f"aws s3 ls s3://stow-carbon-copy/Atlas/{station}/{date}/",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error("Failed to list orchestrators")
+            return []
+        
+        orchestrators = []
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split()
+                if len(parts) >= 2:
+                    orchestrator = parts[-1].rstrip('/')
+                    orchestrators.append(orchestrator)
+        return orchestrators
+    
+    def get_pods(station, date, orchestrator):
+        """Get pods for selected orchestrator"""
+        result = subprocess.run(
+            f"aws s3 ls s3://stow-carbon-copy/Atlas/{station}/{date}/{orchestrator}/",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error("Failed to list pods")
+            return []
+        
+        pods = []
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split()
+                if len(parts) >= 2:
+                    pod = parts[-1].rstrip('/')
+                    if pod.startswith('pod_'):
+                        pods.append(pod)
+        return pods
+    
+    while True:
+        # Station menu
+        stations = get_stations()
+        if not stations:
+            print("No stations found. Retrying...")
+            continue
+        
+        selected_idx = 0
+        while True:
+            display_menu(stations, selected_idx, "Select Station")
+            key = get_key()
+            
+            if key == 'CTRL_C':
+                exit_funct()
+            elif key == 'UP':
+                selected_idx = (selected_idx - 1) % len(stations)
+            elif key == 'DOWN':
+                selected_idx = (selected_idx + 1) % len(stations)
+            elif key == 'ENTER':
+                selected_station = stations[selected_idx]
+                break
+            elif key == 'CTRL_B':
+                return None
+        
+        # Date menu
+        dates = get_latest_dates(selected_station)
+        if not dates:
+            print("No dates found. Going back to station selection...")
+            continue
+        
+        selected_idx = 0
+        while True:
+            display_menu(dates, selected_idx, f"Select Date ({selected_station})")
+            key = get_key()
+            
+            if key == 'CTRL_C':
+                exit_funct()
+            elif key == 'UP':
+                selected_idx = (selected_idx - 1) % len(dates)
+            elif key == 'DOWN':
+                selected_idx = (selected_idx + 1) % len(dates)
+            elif key == 'ENTER':
+                selected_date = dates[selected_idx]
+                break
+            elif key == 'CTRL_B':
+                break
+        
+        if key == 'CTRL_B':
+            continue
+        
+        # Orchestrator menu
+        orchestrators = get_orchestrators(selected_station, selected_date)
+        if not orchestrators:
+            print("No orchestrators found. Going back to date selection...")
+            continue
+        
+        selected_idx = 0
+        while True:
+            display_menu(orchestrators, selected_idx, f"Select Orchestrator ({selected_date})")
+            key = get_key()
+            
+            if key == 'CTRL_C':
+                exit_funct()
+            elif key == 'UP':
+                selected_idx = (selected_idx - 1) % len(orchestrators)
+            elif key == 'DOWN':
+                selected_idx = (selected_idx + 1) % len(orchestrators)
+            elif key == 'ENTER':
+                selected_orchestrator = orchestrators[selected_idx]
+                break
+            elif key == 'CTRL_B':
+                break
+        
+        if key == 'CTRL_B':
+            continue
+        
+        # Pod selection
+        pods = get_pods(selected_station, selected_date, selected_orchestrator)
+        if not pods:
+            print("No pods found. Going back to orchestrator selection...")
+            continue
+        
+        if len(pods) == 1:
+            selected_pod = pods[0]
+            print(f"\nAuto-selected: {selected_pod}")
+        else:
+            selected_idx = 0
+            while True:
+                display_menu(pods, selected_idx, f"Select Pod ({selected_orchestrator})")
+                key = get_key()
+                
+                if key == 'CTRL_C':
+                    exit_funct()
+                elif key == 'UP':
+                    selected_idx = (selected_idx - 1) % len(pods)
+                elif key == 'DOWN':
+                    selected_idx = (selected_idx + 1) % len(pods)
+                elif key == 'ENTER':
+                    selected_pod = pods[selected_idx]
+                    print(f"\nSelected: {selected_pod}")
+                    break
+                elif key == 'CTRL_B':
+                    break
+            
+            if key == 'CTRL_B':
+                continue
+        
+        return (selected_station, selected_date, selected_orchestrator, selected_pod)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
-    # Parse command line arguments first
-    orchestrator = args.orchestrator
-    PodName = args.podname
     benchmark_mode = args.benchmark
-    custom_date = args.date
-    stationId = args.station
+    all_mode = args.all
     
     # Check AWS credentials
     if credentials_check() != 0:
@@ -557,29 +990,17 @@ if __name__ == "__main__":
         if credentials_check() != 0:
             print("\nCredentials still invalid. Exiting.\n")
             exit(1)
-
-    if benchmark_mode:
-        print("\n*** BENCHMARK MODE ENABLED ***")
-        print("Script will loop continuously. Press Ctrl+C to cancel.\n")
-        run_count = 0
-        try:
-            while True:
-                run_count += 1
-                print(f"\n{'='*60}")
-                print(f"Benchmark Run #{run_count}")
-                print(f"{'='*60}\n")
-
-                result = run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
-                if not result:
-                    break
-                
-                # Reset for next iteration to prompt for new inputs
-                orchestrator = args.orchestrator
-                PodName = args.podname
-                custom_date = args.date
-                stationId = args.station
-        except KeyboardInterrupt:
-            exit_funct()
-    else:
-        # Normal single execution
-        run_pick_assistant(orchestrator, PodName, benchmark_mode, custom_date, stationId)
+    
+    # Launch grub menu if -a/--all or -bm/--benchmark flag is set
+    if all_mode or benchmark_mode:
+        if benchmark_mode:
+            print("\n*** BENCHMARK MODE ENABLED ***\n")
+        result = grub_menu()
+        if result:
+            selected_station, selected_date, selected_orchestrator, selected_pod = result
+            logger.info(f"Selected: Station={selected_station}, Date={selected_date}, Orchestrator={selected_orchestrator}, Pod={selected_pod}")
+            run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, benchmark_mode)
+        exit(0)
+    
+    # Normal single execution
+    run_pick_assistant(benchmark_mode)
