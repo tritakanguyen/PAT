@@ -12,6 +12,7 @@ Authors:
     - mathar (Matt Harrison)
 
 Version History:
+    v2.4: Support cloud desktop
     v2.3: Add grub menu allow user select orchestrator id
     v2.2: Bug fix for out synced s3 timezone issue
     v2.1: Minor refactor for migrate to read from s3 bucket
@@ -63,7 +64,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print("PickAssistant v2.3")
+print("PickAssistant v2.4")
 
 # Workflow State Management
 class WorkflowState(Enum):
