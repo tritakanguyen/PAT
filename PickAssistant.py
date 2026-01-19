@@ -12,7 +12,7 @@ Authors:
     - mathar (Matt Harrison)
 
 Version History:
-    v2.3: Add grub menu allow uaer select orchestrator id
+    v2.3: Add grub menu allow user select orchestrator id
     v2.2: Bug fix for out synced s3 timezone issue
     v2.1: Minor refactor for migrate to read from s3 bucket
     v2.0: Major refactor for improved error handling, logging, and integration to webapp.
@@ -225,7 +225,7 @@ def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, 
             logger.error(f"  - {pod_type_s3_uri}")
         if podFace is None:
             logger.error(f"  - {pod_face_s3_uri}")
-        return False
+        raise FileNotFoundError("Missing S3 files")
     
     podBarcode = podId + " " + podType + "-" + podFace
     logger.info(f"S3 URI is valid. Proceeding...")
@@ -728,10 +728,24 @@ def run_pick_assistant(benchmark_mode=False):
             return True
         input("\nPress Enter to retry or Ctrl+C to cancel...")
         print("Retrying...")
+
+def env_check(required_env):
+    """Check if required environment variables are set."""
+    missing = [var for var in required_env if not os.environ.get(var)]
+    if missing:
+        print(f"Error: Missing required environment variables: {', '.join(missing)}")
+        print(f"Contact @ftnguyen for setup env")
+        exit(1)
+
 def credentials_check():
     global result, check
     check = subprocess.run("aws sts get-caller-identity", shell=True, capture_output=True, text=True)
     result = check.returncode
+    if result == 0:
+        identity = json.loads(check.stdout)
+        if identity.get("Account") != "237427770821":
+            print(f"Error: Must use account 237427770821, but got {identity.get('Account')}")
+            result = 1
     return result
 def exit_funct():
     logger.info('Exiting...')
@@ -956,19 +970,21 @@ def grub_menu():
             selected_pod = pods[0]
             print(f"\nAuto-selected: {selected_pod}")
         else:
+            # Add "all" option if multiple pods exist
+            pod_options = pods + ["all"]
             selected_idx = 0
             while True:
-                display_menu(pods, selected_idx, f"Select Pod ({selected_orchestrator})")
+                display_menu(pod_options, selected_idx, f"Select Pod ({selected_orchestrator})")
                 key = get_key()
                 
                 if key == 'CTRL_C':
                     exit_funct()
                 elif key == 'UP':
-                    selected_idx = (selected_idx - 1) % len(pods)
+                    selected_idx = (selected_idx - 1) % len(pod_options)
                 elif key == 'DOWN':
-                    selected_idx = (selected_idx + 1) % len(pods)
+                    selected_idx = (selected_idx + 1) % len(pod_options)
                 elif key == 'ENTER':
-                    selected_pod = pods[selected_idx]
+                    selected_pod = pod_options[selected_idx]
                     print(f"\nSelected: {selected_pod}")
                     break
                 elif key == 'CTRL_B':
@@ -977,30 +993,64 @@ def grub_menu():
             if key == 'CTRL_B':
                 continue
         
-        return (selected_station, selected_date, selected_orchestrator, selected_pod)
+        return (selected_station, selected_date, selected_orchestrator, selected_pod, pods if selected_pod == "all" else None)
 # Execute the main function with benchmark mode support
 if __name__ == "__main__":
+    # Check required environment variables
+    env_check(['ADROIT', 'MONGODB_URI'])
+    
+    # Parse command line arguments first
     benchmark_mode = args.benchmark
     all_mode = args.all
     
     # Check AWS credentials
+    adroit = os.environ.get('ADROIT')
     if credentials_check() != 0:
         print("\nAWS credentials invalid. Launching refresh-adroit-credentials...\n")
-        subprocess.run("zsh -i -c refresh-adroit-credentials", shell=True)
+        subprocess.run(adroit, shell=True)
         if credentials_check() != 0:
             print("\nCredentials still invalid. Exiting.\n")
             exit(1)
     
-    # Launch grub menu if -a/--all or -bm/--benchmark flag is set
-    if all_mode or benchmark_mode:
-        if benchmark_mode:
-            print("\n*** BENCHMARK MODE ENABLED ***\n")
+    # Launch grub menu if -a/--all flag is set
+    if all_mode:
         result = grub_menu()
         if result:
-            selected_station, selected_date, selected_orchestrator, selected_pod = result
+            selected_station, selected_date, selected_orchestrator, selected_pod, all_pods = result
             logger.info(f"Selected: Station={selected_station}, Date={selected_date}, Orchestrator={selected_orchestrator}, Pod={selected_pod}")
-            run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, benchmark_mode)
+            # Run main process with collected variables
+            if selected_pod == "all" and all_pods:
+                warnings = []
+                for pod in all_pods:
+                    logger.info(f"Processing pod: {pod}")
+                    try:
+                        run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, pod, benchmark_mode)
+                    except Exception as e:
+                        warnings.append(f"[WARN] Failed to get info for {selected_orchestrator}/{pod} due to {e}")
+                        continue
+                # Print all warnings at the end
+                for warning in warnings:
+                    print(warning)
+            else:
+                run_pick_assistant_with_params(selected_station, selected_date, selected_orchestrator, selected_pod, benchmark_mode)
         exit(0)
-    
-    # Normal single execution
-    run_pick_assistant(benchmark_mode)
+
+    if benchmark_mode:
+        print("\n*** BENCHMARK MODE ENABLED ***")
+        print("Script will loop continuously. Press Ctrl+C to cancel.\n")
+        run_count = 0
+        try:
+            while True:
+                run_count += 1
+                print(f"\n{'='*60}")
+                print(f"Benchmark Run #{run_count}")
+                print(f"{'='*60}\n")
+
+                result = run_pick_assistant(benchmark_mode)
+                if not result:
+                    break
+        except KeyboardInterrupt:
+            exit_funct()
+    else:
+        # Normal single execution
+        run_pick_assistant(benchmark_mode)
