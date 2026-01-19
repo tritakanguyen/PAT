@@ -741,11 +741,14 @@ def credentials_check():
     global result, check
     check = subprocess.run("aws sts get-caller-identity", shell=True, capture_output=True, text=True)
     result = check.returncode
-    if result == 0:
-        identity = json.loads(check.stdout)
-        if identity.get("Account") != "237427770821":
-            print(f"Error: Must use account 237427770821, but got {identity.get('Account')}")
-            result = 1
+    if result != 0:
+        print("\nMidway credentials expired. Please authenticate...")
+        subprocess.run("mwinit -o", shell=True)
+        return result
+    identity = json.loads(check.stdout)
+    if identity.get("Account") != "237427770821":
+        print(f"Error: Must use account 237427770821, but got {identity.get('Account')}")
+        result = 1
     return result
 def exit_funct():
     logger.info('Exiting...')
