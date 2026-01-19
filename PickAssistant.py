@@ -52,6 +52,8 @@ from urllib.parse import urlparse
 import uuid
 import boto3
 import subprocess
+import certifi
+from pymongo import MongoClient
 from enum import Enum
 
 from typing import Dict, List, Optional, Tuple
@@ -132,10 +134,6 @@ POD_BARCODE_DATABASE = {
     "HB05100404685 H10-A" : "Pod Father",
     "HB05100404685 H10-C" : "Pod Father"
 }
-
-#s3_uri_main = "s3://stow-carbon-copy/Atlas/${stationId}/${date}/${orchestrator}/${PodID}/cycle_${CycleID}/dynamic_1/"
-#podID_uri = s3_uri_main + "3_scene_pod.data.json"
-#match_output_uri = s3_uri_main + "match_output.data.json"
 
 def get_json(s3_uri: str) -> Optional[Dict]:
     """
@@ -375,8 +373,6 @@ def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, 
             return False
 
         try:
-            from pymongo import MongoClient
-
             logger.info(f"Connecting to MongoDB...")
             connection_string = os.environ.get('MONGODB_URI')
             if not connection_string:
@@ -385,7 +381,7 @@ def run_pick_assistant_with_params(stationId, custom_date, orchestrator, podID, 
                 print("  Contact @ftnguyen to set it up")
                 return False
 
-            client = MongoClient(connection_string)
+            client = MongoClient(connection_string, tlsCAFile=certifi.where())
             db = client['podManagement']
             cleans_collection = db['cleans']
             result = cleans_collection.insert_one(clean_document)
@@ -673,8 +669,6 @@ def run_pick_assistant(benchmark_mode=False):
 
         # NOW attempt database connection and upload
         try:
-            from pymongo import MongoClient
-
             logger.info(f"Connecting to MongoDB...")
 
             # Set MONGODB_URI environment variable before running this script
@@ -686,7 +680,7 @@ def run_pick_assistant(benchmark_mode=False):
                 return False
 
             # Connect to MongoDB
-            client = MongoClient(connection_string)
+            client = MongoClient(connection_string, tlsCAFile=certifi.where())
 
             # Select database and collection
             db = client['podManagement']
